@@ -8,11 +8,12 @@ export default function AuthPage() {
     const {signIn, signUp} = useAuth();
 
     const [isLogin, setIsLogin] = useState(true);
-    const [email, setEmail] = useState('qozi@gmail.com');
-    const [password, setPassword] = useState('root1234');
-    const [confirmPassword, setConfirmPassword] = useState('root1234');
+    const [emailOrUsername, setEmailOrUsername] = useState('testuser');
+    const [password, setPassword] = useState('test1234');
+    const [confirmPassword, setConfirmPassword] = useState('test1234');
     const [username, setUsername] = useState('');
     const [fullName, setFullName] = useState('');
+    const [email, setEmail] = useState('');
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
@@ -20,7 +21,6 @@ export default function AuthPage() {
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [promoAccepted, setPromoAccepted] = useState(false);
     const [ageConfirmed, setAgeConfirmed] = useState(false);
-    const [showTermsModal, setShowTermsModal] = useState(false);
 
     const allTermsAccepted = termsAccepted && ageConfirmed;
 
@@ -37,9 +37,11 @@ export default function AuthPage() {
 
         try {
             if (isLogin) {
-                const {error} = await signIn(email, password);
+                // Email yoki Username bilan login
+                const {error} = await signIn(emailOrUsername, password);
                 if (error) setError(error.message);
             } else {
+                // Register
                 if (!email.trim() || !password || !username.trim() || !fullName.trim()) {
                     setError('All fields are required');
                     setLoading(false);
@@ -86,7 +88,7 @@ export default function AuthPage() {
                 <div className="text-center mb-8">
                     <div className="flex items-center justify-center gap-2 mb-4">
                         <Video className="w-10 h-10 text-blue-400 dark:text-blue-600"/>
-                        <h1 className="text-4xl font-bold text-white dark:text-slate-800">Manga Social</h1>
+                        <h1 className="text-4xl font-bold text-white dark:text-slate-800">Social Chat</h1>
                     </div>
                     <p className="text-gray-400 dark:text-gray-600">Connect, Chat, and Video Call</p>
                     <div className="flex justify-center gap-8 mt-6">
@@ -113,16 +115,28 @@ export default function AuthPage() {
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
-                            <label
-                                className="block text-sm font-medium text-gray-300 dark:text-gray-600 mb-1">{t('email')}</label>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="you@example.com"
-                                required
-                            />
+                            <label className="block text-sm font-medium text-gray-300 dark:text-gray-600 mb-1">
+                                {isLogin ? 'Email or Username' : t('email')}
+                            </label>
+                            {isLogin ? (
+                                <input
+                                    type="text"
+                                    value={emailOrUsername}
+                                    onChange={(e) => setEmailOrUsername(e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                    placeholder="testuser or test@example.com"
+                                    required
+                                />
+                            ) : (
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                    placeholder="you@example.com"
+                                    required
+                                />
+                            )}
                         </div>
 
                         {!isLogin && (
@@ -134,7 +148,7 @@ export default function AuthPage() {
                                         type="text"
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                                        className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
                                         placeholder="username"
                                         required
                                     />
@@ -146,7 +160,7 @@ export default function AuthPage() {
                                         type="text"
                                         value={fullName}
                                         onChange={(e) => setFullName(e.target.value)}
-                                        className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
                                         placeholder="Your Name"
                                         required
                                     />
@@ -162,7 +176,7 @@ export default function AuthPage() {
                                     type={showPassword ? 'text' : 'password'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
                                     placeholder="••••••••"
                                     required
                                     minLength={6}
@@ -185,7 +199,7 @@ export default function AuthPage() {
                                     type="password"
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
                                     placeholder="••••••••"
                                     required
                                 />
@@ -270,6 +284,18 @@ export default function AuthPage() {
                             {isLogin ? t('signUp') : t('signIn')}
                         </button>
                     </p>
+
+                    {isLogin && (
+                        <div className="mt-6 pt-6 border-t border-slate-700 dark:border-slate-300">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-3">Test
+                                Credentials:</p>
+                            <div className="space-y-2 text-xs text-gray-400 dark:text-gray-500">
+                                <p><strong>Email:</strong> test@example.com | <strong>Pass:</strong> test1234</p>
+                                <p><strong>Username:</strong> testuser | <strong>Pass:</strong> test1234</p>
+                                <p><strong>Username:</strong> demouser | <strong>Pass:</strong> demo1234</p>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
