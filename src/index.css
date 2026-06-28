@@ -2,214 +2,194 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Safe area padding for iOS devices */
 :root {
-  --sat: env(safe-area-inset-top);
-  --sar: env(safe-area-inset-right);
-  --sab: env(safe-area-inset-bottom);
-  --sal: env(safe-area-inset-left);
+    --sat: env(safe-area-inset-top);
+    --sar: env(safe-area-inset-right);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
 }
 
-/* Base styles */
 html {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
 }
 
 body {
-  margin: 0;
-  padding: 0;
-  overscroll-behavior-y: contain;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.3s ease;
+    margin: 0;
+    padding: 0;
+    overscroll-behavior-y: contain;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.3s ease;
 }
 
-/* Dark mode body */
 body.dark-mode-bg {
-  background-color: #0f172a;
+    background-color: #0f172a;
 }
 
-/* Light mode body */
 body.light-mode-bg {
-  background-color: #f9fafb;
+    background-color: #f9fafb;
 }
 
-/* Safe area utility class */
 .pb-safe {
-  padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+    padding-bottom: max(env(safe-area-inset-bottom), 1rem);
 }
 
-/* Custom scrollbar */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: #334155 #0f172a;
+    scrollbar-width: thin;
+    scrollbar-color: #334155 #0f172a;
 }
 
 *::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+    width: 4px;
+    height: 4px;
 }
 
 *::-webkit-scrollbar-track {
-  background: transparent;
+    background: transparent;
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: rgba(71, 85, 105, 0.5);
-  border-radius: 9999px;
+    background-color: rgba(71, 85, 105, 0.5);
+    border-radius: 9999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(100, 116, 139, 0.7);
+    background-color: rgba(100, 116, 139, 0.7);
 }
 
-/* Hide scrollbar but keep functionality */
 .scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
 
 .scrollbar-hide::-webkit-scrollbar {
-  display: none;
+    display: none;
 }
 
-/* Better touch feedback */
 .touch-manipulation {
-  touch-action: manipulation;
+    touch-action: manipulation;
 }
 
-/* Prevent text selection on interactive elements */
 button, a {
-  -webkit-user-select: none;
-  user-select: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
-/* Allow text selection in inputs and textareas */
 input, textarea {
-  -webkit-user-select: text;
-  user-select: text;
-  font-size: 16px; /* Prevents zoom on iOS */
+    -webkit-user-select: text;
+    user-select: text;
+    font-size: 16px;
 }
 
-/* Better button press feedback on mobile */
 @media (hover: none) {
-  button:active {
-    opacity: 0.8;
-    transform: scale(0.98);
-  }
+    button:active {
+        opacity: 0.8;
+        transform: scale(0.98);
+    }
 }
 
-/* Image optimization */
 img {
-  image-rendering: -webkit-optimize-contrast;
+    image-rendering: -webkit-optimize-contrast;
 }
 
-/* Video optimization */
 video {
-  object-fit: cover;
+    object-fit: cover;
 }
 
-/* Animations */
 @keyframes pulse-ring {
-  0% {
-    transform: scale(0.95);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1);
-    opacity: 0.5;
-  }
-  100% {
-    transform: scale(0.95);
-    opacity: 1;
-  }
+    0% {
+        transform: scale(0.95);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1);
+        opacity: 0.5;
+    }
+    100% {
+        transform: scale(0.95);
+        opacity: 1;
+    }
 }
 
 .animate-pulse-ring {
-  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @keyframes slideUp {
-  from {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 .animate-slide-up {
-  animation: slideUp 0.3s ease-out;
+    animation: slideUp 0.3s ease-out;
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.2s ease-out;
+    animation: fadeIn 0.2s ease-out;
 }
 
-/* Message bubble animation */
 @keyframes messageIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .animate-message {
-  animation: messageIn 0.2s ease-out;
+    animation: messageIn 0.2s ease-out;
 }
 
-/* Loading skeleton */
 @keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
 }
 
 .skeleton {
-  background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.05) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
 }
 
-/* Fix for iOS Safari vh bug */
 @supports (-webkit-touch-callout: none) {
-  .min-h-screen {
-    min-height: -webkit-fill-available;
-  }
+    .min-h-screen {
+        min-height: -webkit-fill-available;
+    }
 }
 
-/* Glass effect */
 .glass {
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
 }
 
-/* Gradient border for stories */
 .story-gradient {
-  background: linear-gradient(to top right, #3b82f6, #8b5cf6, #ec4899);
+    background: linear-gradient(to top right, #3b82f6, #8b5cf6, #ec4899);
 }
 
-/* Smooth transitions for theme change */
 .theme-transition {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }

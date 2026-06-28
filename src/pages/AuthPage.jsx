@@ -17,7 +17,6 @@ export default function AuthPage() {
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
-    // Terms agreement states
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [promoAccepted, setPromoAccepted] = useState(false);
     const [ageConfirmed, setAgeConfirmed] = useState(false);
@@ -41,7 +40,6 @@ export default function AuthPage() {
                 const {error} = await signIn(email, password);
                 if (error) setError(error.message);
             } else {
-                // Validate registration
                 if (!email.trim() || !password || !username.trim() || !fullName.trim()) {
                     setError('All fields are required');
                     setLoading(false);
@@ -85,7 +83,6 @@ export default function AuthPage() {
         <div
             className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 dark:from-slate-100 dark:via-blue-100 dark:to-slate-100 flex items-center justify-center p-4">
             <div className="w-full max-w-md">
-                {/* Logo Section */}
                 <div className="text-center mb-8">
                     <div className="flex items-center justify-center gap-2 mb-4">
                         <Video className="w-10 h-10 text-blue-400 dark:text-blue-600"/>
@@ -108,7 +105,6 @@ export default function AuthPage() {
                     </div>
                 </div>
 
-                {/* Auth Form */}
                 <div
                     className="bg-slate-800/50 dark:bg-white/80 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-slate-700 dark:border-slate-200">
                     <h2 className="text-2xl font-semibold text-white dark:text-slate-800 mb-6 text-center">
@@ -116,7 +112,6 @@ export default function AuthPage() {
                     </h2>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* Email - always shown */}
                         <div>
                             <label
                                 className="block text-sm font-medium text-gray-300 dark:text-gray-600 mb-1">{t('email')}</label>
@@ -130,7 +125,6 @@ export default function AuthPage() {
                             />
                         </div>
 
-                        {/* Registration-only fields */}
                         {!isLogin && (
                             <>
                                 <div>
@@ -160,7 +154,6 @@ export default function AuthPage() {
                             </>
                         )}
 
-                        {/* Password */}
                         <div>
                             <label
                                 className="block text-sm font-medium text-gray-300 dark:text-gray-600 mb-1">{t('password')}</label>
@@ -184,7 +177,6 @@ export default function AuthPage() {
                             </div>
                         </div>
 
-                        {/* Confirm Password - registration only */}
                         {!isLogin && (
                             <div>
                                 <label
@@ -200,7 +192,6 @@ export default function AuthPage() {
                             </div>
                         )}
 
-                        {/* Terms Agreement - registration only */}
                         {!isLogin && (
                             <div className="bg-blue-500/10 dark:bg-blue-100 rounded-xl p-4 space-y-3">
                                 <button
@@ -251,14 +242,12 @@ export default function AuthPage() {
                             </div>
                         )}
 
-                        {/* Error Message */}
                         {error && (
                             <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm">
                                 {error}
                             </div>
                         )}
 
-                        {/* Submit Button */}
                         <button
                             type="submit"
                             disabled={loading}
@@ -268,7 +257,6 @@ export default function AuthPage() {
                         </button>
                     </form>
 
-                    {/* Toggle Login/Register */}
                     <p className="text-center text-gray-400 dark:text-gray-600 mt-6">
                         {isLogin ? t('noAccount') : t('haveAccount')}
                         <button
