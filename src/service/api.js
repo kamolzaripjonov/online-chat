@@ -25,7 +25,9 @@ api.interceptors.response.use(
     (error) => {
         if (error.response?.status === 401) {
             localStorage.removeItem('socialchat_token');
-            window.location.href = '/auth';
+            localStorage.removeItem('socialchat_user');
+            localStorage.removeItem('socialchat_profile');
+            window.location.href = '/';
         }
         return Promise.reject(error);
     }

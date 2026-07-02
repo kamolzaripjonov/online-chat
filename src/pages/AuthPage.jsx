@@ -1,6 +1,7 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {useAuth} from '../contexts/AuthContext';
 import {useLanguage} from '../contexts/LanguageContext';
+import {useTheme} from '../contexts/ThemeContext';
 import {MessageCircle, Video, Users, Check, Eye, EyeOff} from 'lucide-react';
 
 export default function AuthPage() {
@@ -8,9 +9,9 @@ export default function AuthPage() {
     const {signIn, signUp} = useAuth();
 
     const [isLogin, setIsLogin] = useState(true);
-    const [emailOrUsername, setEmailOrUsername] = useState('testuser');
-    const [password, setPassword] = useState('test1234');
-    const [confirmPassword, setConfirmPassword] = useState('test1234');
+    const [emailOrUsername, setEmailOrUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [username, setUsername] = useState('');
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
@@ -37,11 +38,15 @@ export default function AuthPage() {
 
         try {
             if (isLogin) {
-                // Email yoki Username bilan login
+                if (!emailOrUsername.trim() || !password) {
+                    setError('Please fill in all fields');
+                    setLoading(false);
+                    return;
+                }
+
                 const {error} = await signIn(emailOrUsername, password);
                 if (error) setError(error.message);
             } else {
-                // Register
                 if (!email.trim() || !password || !username.trim() || !fullName.trim()) {
                     setError('All fields are required');
                     setLoading(false);
@@ -123,8 +128,8 @@ export default function AuthPage() {
                                     type="text"
                                     value={emailOrUsername}
                                     onChange={(e) => setEmailOrUsername(e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
-                                    placeholder="testuser or test@example.com"
+                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="email or username"
                                     required
                                 />
                             ) : (
@@ -132,7 +137,7 @@ export default function AuthPage() {
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="you@example.com"
                                     required
                                 />
@@ -148,7 +153,7 @@ export default function AuthPage() {
                                         type="text"
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                                        className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                        className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         placeholder="username"
                                         required
                                     />
@@ -160,7 +165,7 @@ export default function AuthPage() {
                                         type="text"
                                         value={fullName}
                                         onChange={(e) => setFullName(e.target.value)}
-                                        className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                        className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         placeholder="Your Name"
                                         required
                                     />
@@ -176,7 +181,7 @@ export default function AuthPage() {
                                     type={showPassword ? 'text' : 'password'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="••••••••"
                                     required
                                     minLength={6}
@@ -199,7 +204,7 @@ export default function AuthPage() {
                                     type="password"
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                    className="w-full px-4 py-3 bg-slate-700/50 dark:bg-slate-100 border border-slate-600 dark:border-slate-300 rounded-lg text-white dark:text-slate-800 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="••••••••"
                                     required
                                 />
