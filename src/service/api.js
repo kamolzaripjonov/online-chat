@@ -23,6 +23,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
+        console.error('API Error:', error.response?.data);
         if (error.response?.status === 401) {
             localStorage.removeItem('socialchat_token');
             localStorage.removeItem('socialchat_user');

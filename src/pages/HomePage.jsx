@@ -5,6 +5,7 @@ import {useTheme} from '../contexts/ThemeContext';
 import PostCard from '../components/PostCard';
 import StoriesBar from '../components/StoriesBar';
 import StoryViewer from '../components/StoryViewer';
+import {postService, storyService} from '../service/authService';
 
 export default function HomePage() {
     const {user, profile} = useAuth();
@@ -12,82 +13,59 @@ export default function HomePage() {
     const {isDarkMode} = useTheme();
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     const [storyViewerOpen, setStoryViewerOpen] = useState(false);
     const [currentStoryUserId, setCurrentStoryUserId] = useState('');
     const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
     const [storyGroups, setStoryGroups] = useState([]);
 
-    const [notificationSent, setNotificationSent] = useState(new Set());
-
     useEffect(() => {
         loadPosts();
         loadStories();
     }, [user]);
 
-    useEffect(() => {
-        if (posts.length > 0) {
-            posts.forEach(post => {
-                if (post.user_id !== user?.id && !notificationSent.has(post.id)) {
-                    const postTime = new Date(post.created_at).getTime();
-                    const now = Date.now();
-                    if (now - postTime < 60000) {
-                        addNewPostNotification(post);
-                        setNotificationSent(prev => new Set([...prev, post.id]));
-                    }
-                }
-            });
+    const loadPosts = async () => {
+        try {
+            setLoading(true);
+            const data = await postService.getPosts(1, 20);
+            setPosts(data);
+            setError(null);
+        } catch (err) {
+            console.error('Error loading posts:', err);
+            setError('Failed to load posts');
+            setPosts([]);
+        } finally {
+            setLoading(false);
         }
-    }, [posts]);
-
-    const addNewPostNotification = (post) => {
-        const stored = localStorage.getItem('manga_notifications');
-        const notifications = stored ? JSON.parse(stored) : [];
-        notifications.unshift({
-            id: `notif-${Date.now()}`,
-            type: 'post',
-            from_user: post.profiles,
-            post_id: post.id,
-            for_user_id: user.id,
-            created_at: new Date().toISOString(),
-            read: false,
-        });
-        localStorage.setItem('manga_notifications', JSON.stringify(notifications));
     };
 
-    const loadPosts = () => {
-        const stored = localStorage.getItem('manga_posts');
-        const posts = stored ? JSON.parse(stored) : [];
-        setPosts(posts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
-        setLoading(false);
-    };
+    const loadStories = async () => {
+        try {
+            const data = await storyService.getStories();
+            const groups = {};
 
-    const loadStories = () => {
-        const stored = localStorage.getItem('manga_stories');
-        const stories = stored ? JSON.parse(stored) : [];
-        const viewedStored = localStorage.getItem('manga_story_views');
-        const viewedIds = viewedStored ? JSON.parse(viewedStored) : [];
+            data.forEach((story) => {
+                if (!groups[story.user._id]) {
+                    groups[story.user._id] = {
+                        user_id: story.user._id,
+                        profiles: story.user,
+                        stories: [],
+                        has_unviewed: !story.viewers?.some(v => v.user === user?.id),
+                    };
+                }
+                groups[story.user._id].stories.push(story);
+            });
 
-        const groups = {};
-        stories.forEach((story) => {
-            if (!groups[story.user_id]) {
-                groups[story.user_id] = {
-                    user_id: story.user_id,
-                    profiles: story.profiles,
-                    stories: [],
-                    has_unviewed: !viewedIds.includes(story.id),
-                };
-            }
-            groups[story.user_id].stories.push(story);
-            if (!viewedIds.includes(story.id)) groups[story.user_id].has_unviewed = true;
-        });
-
-        const sortedGroups = Object.values(groups).sort((a, b) => {
-            if (a.user_id === user?.id) return -1;
-            if (b.user_id === user?.id) return 1;
-            return 0;
-        });
-        setStoryGroups(sortedGroups);
+            const sortedGroups = Object.values(groups).sort((a, b) => {
+                if (a.user_id === user?.id) return -1;
+                if (b.user_id === user?.id) return 1;
+                return 0;
+            });
+            setStoryGroups(sortedGroups);
+        } catch (err) {
+            console.error('Error loading stories:', err);
+        }
     };
 
     const handleOpenStory = (userId, index) => {
@@ -130,6 +108,14 @@ export default function HomePage() {
                             <div className={`aspect-square ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}/>
                         </div>
                     ))
+                ) : error ? (
+                    <div className="text-center py-16 px-4">
+                        <div
+                            className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-slate-800' : 'bg-gray-100'}`}>
+                            <span className="text-3xl">⚠️</span>
+                        </div>
+                        <p className={`text-lg font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{error}</p>
+                    </div>
                 ) : posts.length === 0 ? (
                     <div className="text-center py-16 px-4">
                         <div
@@ -141,7 +127,7 @@ export default function HomePage() {
                     </div>
                 ) : (
                     posts.map((post) => (
-                        <PostCard key={post.id} post={post} onRefresh={loadPosts}/>
+                        <PostCard key={post._id} post={post} onRefresh={loadPosts}/>
                     ))
                 )}
             </div>

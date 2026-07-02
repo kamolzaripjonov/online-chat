@@ -32,32 +32,32 @@ export function AuthProvider({children}) {
             setError(null);
             const response = await authService.register(email, username, fullName, password);
 
-            if (response.user) {
-                setUser({id: response.user.id, email: response.user.email});
+            if (response.success && response.user) {
+                setUser({id: response.user._id, email: response.user.email});
                 setProfile(response.user);
                 return {error: null};
             }
             return {error: {message: response.message || 'Registration failed'}};
         } catch (e) {
-            const errorMsg = e.response?.data?.message || 'Registration failed';
+            const errorMsg = e.response?.data?.message || e.message || 'Registration failed';
             setError(errorMsg);
             return {error: {message: errorMsg}};
         }
     };
 
-    const signIn = async (emailOrUsername, password) => {
+    const signIn = async (email, password) => {
         try {
             setError(null);
-            const response = await authService.login(emailOrUsername, password);
+            const response = await authService.login(email, password);
 
-            if (response.user) {
-                setUser({id: response.user.id, email: response.user.email});
+            if (response.success && response.user) {
+                setUser({id: response.user._id, email: response.user.email});
                 setProfile(response.user);
                 return {error: null};
             }
             return {error: {message: response.message || 'Login failed'}};
         } catch (e) {
-            const errorMsg = e.response?.data?.message || 'Invalid email/username or password';
+            const errorMsg = e.response?.data?.message || e.message || 'Invalid email or password';
             setError(errorMsg);
             return {error: {message: errorMsg}};
         }

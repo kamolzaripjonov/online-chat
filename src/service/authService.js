@@ -1,39 +1,51 @@
 import api from './api';
 
 export const authService = {
-    login: async (emailOrUsername, password) => {
-        const response = await api.post('/auth/login', {
-            email: emailOrUsername,
-            password,
-        });
-        if (response.data.token) {
-            localStorage.setItem('socialchat_token', response.data.token);
-            localStorage.setItem('socialchat_user', JSON.stringify({
-                id: response.data.user.id,
-                email: response.data.user.email
-            }));
-            localStorage.setItem('socialchat_profile', JSON.stringify(response.data.user));
+    login: async (email, password) => {
+        try {
+            const response = await api.post('/auth/login', {
+                email,
+                password,
+            });
+
+            if (response.data.success && response.data.token) {
+                localStorage.setItem('socialchat_token', response.data.token);
+                localStorage.setItem('socialchat_user', JSON.stringify({
+                    id: response.data.user._id,
+                    email: response.data.user.email
+                }));
+                localStorage.setItem('socialchat_profile', JSON.stringify(response.data.user));
+            }
+            return response.data;
+        } catch (error) {
+            console.error('Login error:', error);
+            throw error;
         }
-        return response.data;
     },
 
     register: async (email, username, fullName, password) => {
-        const response = await api.post('/auth/register', {
-            email,
-            username,
-            name: fullName,
-            password,
-            acceptedTerms: true,
-        });
-        if (response.data.token) {
-            localStorage.setItem('socialchat_token', response.data.token);
-            localStorage.setItem('socialchat_user', JSON.stringify({
-                id: response.data.user.id,
-                email: response.data.user.email
-            }));
-            localStorage.setItem('socialchat_profile', JSON.stringify(response.data.user));
+        try {
+            const response = await api.post('/auth/register', {
+                email,
+                username,
+                name: fullName,
+                password,
+                acceptedTerms: true,
+            });
+
+            if (response.data.success && response.data.token) {
+                localStorage.setItem('socialchat_token', response.data.token);
+                localStorage.setItem('socialchat_user', JSON.stringify({
+                    id: response.data.user._id,
+                    email: response.data.user.email
+                }));
+                localStorage.setItem('socialchat_profile', JSON.stringify(response.data.user));
+            }
+            return response.data;
+        } catch (error) {
+            console.error('Register error:', error);
+            throw error;
         }
-        return response.data;
     },
 
     logout: async () => {
@@ -53,7 +65,9 @@ export const authService = {
 
     updateProfile: async (updates) => {
         const response = await api.put('/users/me', updates);
-        localStorage.setItem('socialchat_profile', JSON.stringify(response.data.user));
+        if (response.data.user) {
+            localStorage.setItem('socialchat_profile', JSON.stringify(response.data.user));
+        }
         return response.data.user;
     },
 };
@@ -61,7 +75,7 @@ export const authService = {
 export const postService = {
     getPosts: async (page = 1, limit = 20) => {
         const response = await api.get(`/posts?page=${page}&limit=${limit}`);
-        return response.data;
+        return response.data.posts || [];
     },
 
     createPost: async (content, media = [], hashtags = [], mentions = []) => {
@@ -71,12 +85,12 @@ export const postService = {
             hashtags,
             mentions,
         });
-        return response.data;
+        return response.data.data;
     },
 
     getPostById: async (postId) => {
         const response = await api.get(`/posts/${postId}`);
-        return response.data;
+        return response.data.post;
     },
 
     updatePost: async (postId, content, location = null) => {
@@ -84,7 +98,7 @@ export const postService = {
             content,
             location,
         });
-        return response.data;
+        return response.data.data;
     },
 
     deletePost: async (postId) => {
@@ -103,60 +117,13 @@ export const postService = {
     },
 
     sharePost: async (postId, userId = null) => {
-        const response = await api.post(`/posts/${postId}/share`, {userId});
+        const response = await api.post(`/posts/${postId}/share`, { userId });
         return response.data;
     },
 
     getSavedPosts: async (page = 1, limit = 20) => {
         const response = await api.get(`/posts/saved?page=${page}&limit=${limit}`);
-        return response.data;
-    },
-};
-
-export const commentService = {
-    addComment: async (postId, content, mentions = []) => {
-        const response = await api.post(`/comments`, {
-            postId,
-            content,
-            mentions,
-        });
-        return response.data;
-    },
-
-    deleteComment: async (commentId) => {
-        const response = await api.delete(`/comments/${commentId}`);
-        return response.data;
-    },
-
-    toggleCommentLike: async (commentId) => {
-        const response = await api.put(`/comments/${commentId}/like`);
-        return response.data;
-    },
-};
-
-export const storyService = {
-    getStories: async () => {
-        const response = await api.get('/stories');
-        return response.data;
-    },
-
-    createStory: async (content, media = null, background = 'white') => {
-        const response = await api.post('/stories', {
-            content,
-            media,
-            background,
-        });
-        return response.data;
-    },
-
-    viewStory: async (storyId) => {
-        const response = await api.post(`/stories/${storyId}/view`);
-        return response.data;
-    },
-
-    deleteStory: async (storyId) => {
-        const response = await api.delete(`/stories/${storyId}`);
-        return response.data;
+        return response.data.posts || [];
     },
 };
 
@@ -167,12 +134,12 @@ export const messageService = {
             content,
             type,
         });
-        return response.data;
+        return response.data.data;
     },
 
     getMessages: async (userId, limit = 50) => {
         const response = await api.get(`/messages/${userId}?limit=${limit}`);
-        return response.data;
+        return response.data.messages || [];
     },
 
     markAsRead: async (messageId) => {
@@ -181,31 +148,10 @@ export const messageService = {
     },
 };
 
-export const callService = {
-    startCall: async (receiverId) => {
-        const response = await api.post('/calls', {
-            receiverId,
-        });
-        return response.data;
-    },
-
-    endCall: async (callId, duration) => {
-        const response = await api.post(`/calls/${callId}/end`, {
-            duration,
-        });
-        return response.data;
-    },
-
-    getCallHistory: async (userId, limit = 20) => {
-        const response = await api.get(`/calls/${userId}?limit=${limit}`);
-        return response.data;
-    },
-};
-
 export const notificationService = {
     getNotifications: async (page = 1, limit = 50) => {
         const response = await api.get(`/notifications?page=${page}&limit=${limit}`);
-        return response.data;
+        return response.data.notifications || [];
     },
 
     markAsRead: async (notificationId) => {
@@ -225,19 +171,19 @@ export const notificationService = {
 
     getUnreadCount: async () => {
         const response = await api.get('/notifications/unread-count');
-        return response.data;
+        return response.data.unreadCount || 0;
     },
 };
 
 export const userService = {
     searchUsers: async (query) => {
         const response = await api.get(`/users/search?query=${query}`);
-        return response.data;
+        return response.data.users || [];
     },
 
     getUser: async (userId) => {
         const response = await api.get(`/users/${userId}`);
-        return response.data;
+        return response.data.user;
     },
 
     getMyLimits: async () => {
@@ -253,5 +199,52 @@ export const userService = {
     unfollow: async (userId) => {
         const response = await api.delete(`/follow/${userId}`);
         return response.data;
+    },
+};
+
+export const storyService = {
+    getStories: async () => {
+        const response = await api.get('/stories');
+        return response.data.stories || [];
+    },
+
+    createStory: async (content, media = null, background = 'white') => {
+        const response = await api.post('/stories', {
+            content,
+            media,
+            background,
+        });
+        return response.data.data;
+    },
+
+    viewStory: async (storyId) => {
+        const response = await api.post(`/stories/${storyId}/view`);
+        return response.data;
+    },
+
+    deleteStory: async (storyId) => {
+        const response = await api.delete(`/stories/${storyId}`);
+        return response.data;
+    },
+};
+
+export const callService = {
+    startCall: async (receiverId) => {
+        const response = await api.post('/calls', {
+            receiverId,
+        });
+        return response.data.data;
+    },
+
+    endCall: async (callId, duration) => {
+        const response = await api.post(`/calls/${callId}/end`, {
+            duration,
+        });
+        return response.data.data;
+    },
+
+    getCallHistory: async (userId, limit = 20) => {
+        const response = await api.get(`/calls/${userId}?limit=${limit}`);
+        return response.data.calls || [];
     },
 };
