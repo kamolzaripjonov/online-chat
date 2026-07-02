@@ -284,18 +284,6 @@ export default function AuthPage() {
                             {isLogin ? t('signUp') : t('signIn')}
                         </button>
                     </p>
-
-                    {isLogin && (
-                        <div className="mt-6 pt-6 border-t border-slate-700 dark:border-slate-300">
-                            <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-3">Test
-                                Credentials:</p>
-                            <div className="space-y-2 text-xs text-gray-400 dark:text-gray-500">
-                                <p><strong>Email:</strong> test@example.com | <strong>Pass:</strong> test1234</p>
-                                <p><strong>Username:</strong> testuser | <strong>Pass:</strong> test1234</p>
-                                <p><strong>Username:</strong> demouser | <strong>Pass:</strong> demo1234</p>
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
