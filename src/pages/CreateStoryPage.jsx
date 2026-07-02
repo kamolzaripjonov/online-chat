@@ -1,137 +1,169 @@
-import React, {useState, useRef} from 'react';
+import React, {useState} from 'react';
 import {useAuth} from '../contexts/AuthContext';
 import {useLanguage} from '../contexts/LanguageContext';
 import {useTheme} from '../contexts/ThemeContext';
-import {X, Camera, Upload, Image, Video} from 'lucide-react';
+import {storyService} from '../service/authService';
+import {X, Image as ImageIcon, Loader} from 'lucide-react';
 
 export default function CreateStoryPage({onClose}) {
-    const {user, profile} = useAuth();
+    const {profile} = useAuth();
     const {t} = useLanguage();
     const {isDarkMode} = useTheme();
 
-    const [selectedFile, setSelectedFile] = useState(null);
-    const [previewUrl, setPreviewUrl] = useState('');
-    const [mediaType, setMediaType] = useState('image');
-    const [submitting, setSubmitting] = useState(false);
+    const [content, setContent] = useState('');
+    const [media, setMedia] = useState(null);
+    const [background, setBackground] = useState('white');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const fileInputRef = useRef(null);
+    const backgrounds = ['white', 'black', 'gradient_1', 'gradient_2', 'gradient_3', 'gradient_4', 'gradient_5'];
 
-    const handleFileSelect = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        setSelectedFile(file);
-        const url = URL.createObjectURL(file);
-        setPreviewUrl(url);
-
-        if (file.type.startsWith('video/')) {
-            setMediaType('video');
-        } else {
-            setMediaType('image');
+    const handleImageSelect = (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                setMedia({
+                    url: event.target?.result,
+                    type: file.type.startsWith('image') ? 'image' : 'video'
+                });
+            };
+            reader.readAsDataURL(file);
         }
     };
 
-    const handleSubmit = async () => {
-        if (!selectedFile) return;
-        setSubmitting(true);
+    const handlePublish = async () => {
+        if (!content.trim() && !media) {
+            setError('Please add content or media');
+            return;
+        }
 
         try {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64Url = reader.result;
+            setLoading(true);
+            setError('');
 
-                const newStory = {
-                    id: `story-${Date.now()}`,
-                    user_id: user.id,
-                    media_url: base64Url,
-                    media_type: mediaType,
-                    created_at: new Date().toISOString(),
-                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-                    profiles: {
-                        username: profile.username,
-                        full_name: profile.full_name,
-                        avatar_url: profile.avatar_url,
-                    },
-                    views_count: 0,
-                    viewed_by: [],
-                };
+            await storyService.createStory(content, media, background);
 
-                const stored = localStorage.getItem('manga_stories');
-                const stories = stored ? JSON.parse(stored) : [];
-                stories.unshift(newStory);
-                localStorage.setItem('manga_stories', JSON.stringify(stories));
-
-                onClose();
-            };
-            reader.readAsDataURL(selectedFile);
-        } catch (e) {
-            console.error('Error creating story:', e);
+            onClose();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to create story');
         } finally {
-            setSubmitting(false);
+            setLoading(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900 dark:bg-slate-100 flex flex-col z-50">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
             <div
-                className={`flex items-center justify-between p-4 border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
-                <button onClick={onClose} className="text-gray-400 hover:text-white">
-                    <X className="w-6 h-6"/>
-                </button>
-                <h1 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t('createStory')}</h1>
-                <button
-                    onClick={handleSubmit}
-                    disabled={!selectedFile || submitting}
-                    className={`font-semibold disabled:opacity-50 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}
-                >
-                    {submitting ? 'Posting...' : t('share')}
-                </button>
-            </div>
-
-            <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                accept="image/*,video/*"
-                className="hidden"
-            />
-
-            <div className="flex-1 flex items-center justify-center p-4">
-                {previewUrl ? (
-                    <div className="w-full max-w-md aspect-[9/16] rounded-2xl overflow-hidden bg-slate-800 relative">
-                        {mediaType === 'image' ? (
-                            <img src={previewUrl} alt="Preview" className="w-full h-full object-cover"/>
-                        ) : (
-                            <video src={previewUrl} className="w-full h-full object-cover" controls/>
-                        )}
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            className={`absolute bottom-4 right-4 px-3 py-2 rounded-lg text-sm flex items-center gap-2 transition ${isDarkMode ? 'bg-slate-900/80 text-white hover:bg-slate-800' : 'bg-white/80 text-gray-900 hover:bg-white'}`}
-                        >
-                            <Upload className="w-4 h-4"/>
-                            Change
-                        </button>
-                    </div>
-                ) : (
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`w-full max-w-md aspect-[9/16] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 transition ${isDarkMode ? 'bg-slate-800 border-slate-600 hover:bg-slate-700' : 'bg-gray-100 border-gray-300 hover:bg-gray-200'}`}
-                    >
-                        <div
-                            className={`w-20 h-20 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-slate-600' : 'bg-gray-200'}`}>
-                            <Camera className={`w-10 h-10 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}/>
-                        </div>
-                        <p className={`font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Add to your
-                            story</p>
-                        <div
-                            className={`flex items-center gap-4 text-sm ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                            <span className="flex items-center gap-1"><Image className="w-4 h-4"/> Photo</span>
-                            <span className="flex items-center gap-1"><Video className="w-4 h-4"/> Video</span>
-                        </div>
-                        <p className={`text-sm ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Tap to select from
-                            gallery</p>
+                className={`w-full sm:max-w-2xl rounded-t-3xl sm:rounded-2xl max-h-[90vh] overflow-hidden flex flex-col ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                {/* Header */}
+                <div
+                    className={`flex items-center justify-between p-4 border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
+                    <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t('createStory')}</h2>
+                    <button onClick={onClose}
+                            className={`p-2 rounded-full transition ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-slate-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>
+                        <X className="w-6 h-6"/>
                     </button>
-                )}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {/* Story Preview */}
+                    {!media ? (
+                        <div className={`w-full aspect-video rounded-lg flex items-center justify-center ${
+                            background === 'white' ? 'bg-white' :
+                                background === 'black' ? 'bg-black' :
+                                    'bg-gradient-to-br from-purple-500 to-pink-500'
+                        }`}>
+                            <p className={`text-center px-4 text-2xl font-bold ${
+                                background === 'white' ? 'text-gray-900' :
+                                    background === 'black' ? 'text-white' :
+                                        'text-white'
+                            }`}>
+                                {content || 'Your story here'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="relative w-full aspect-video rounded-lg overflow-hidden">
+                            {media.type === 'image' ? (
+                                <img src={media.url} alt="" className="w-full h-full object-cover"/>
+                            ) : (
+                                <video src={media.url} className="w-full h-full object-cover"/>
+                            )}
+                            <button
+                                onClick={() => setMedia(null)}
+                                className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white"
+                            >
+                                <X className="w-4 h-4"/>
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Text Input */}
+                    {!media && (
+                        <textarea
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            placeholder="What's on your mind?"
+                            className={`w-full px-4 py-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-slate-700 text-white placeholder-gray-500' : 'bg-gray-100 text-gray-900 placeholder-gray-400'}`}
+                            rows={3}
+                        />
+                    )}
+
+                    {/* Background Selection */}
+                    {!media && (
+                        <div>
+                            <p className={`text-sm font-semibold mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Background</p>
+                            <div className="grid grid-cols-7 gap-2">
+                                {backgrounds.map((bg) => (
+                                    <button
+                                        key={bg}
+                                        onClick={() => setBackground(bg)}
+                                        className={`w-full aspect-square rounded-lg border-2 transition ${
+                                            background === bg ? 'border-blue-500' : 'border-gray-300'
+                                        } ${
+                                            bg === 'white' ? 'bg-white' :
+                                                bg === 'black' ? 'bg-black' :
+                                                    'bg-gradient-to-br from-purple-500 to-pink-500'
+                                        }`}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm">
+                            {error}
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div
+                    className={`border-t ${isDarkMode ? 'border-slate-700' : 'border-gray-200'} p-4 flex items-center gap-3`}>
+                    {!media && (
+                        <label
+                            className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg cursor-pointer transition ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'}`}>
+                            <ImageIcon className="w-5 h-5"/>
+                            <span className="font-medium">{t('addPhoto')}</span>
+                            <input
+                                type="file"
+                                accept="image/*,video/*"
+                                onChange={handleImageSelect}
+                                className="hidden"
+                            />
+                        </label>
+                    )}
+                    <button
+                        onClick={handlePublish}
+                        disabled={loading || (!content.trim() && !media)}
+                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                        {loading && <Loader className="w-4 h-4 animate-spin"/>}
+                        {t('share')}
+                    </button>
+                </div>
             </div>
         </div>
     );
