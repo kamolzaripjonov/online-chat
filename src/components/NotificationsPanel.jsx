@@ -88,7 +88,6 @@ export default function NotificationsPanel({onClose}) {
         if (minutes < 60) return `${minutes} minut oldin`;
         if (hours < 24) return `${hours} soat oldin`;
         if (days < 7) return `${days} kun oldin`;
-
         return date.toLocaleDateString('uz-UZ');
     };
 
@@ -102,19 +101,13 @@ export default function NotificationsPanel({onClose}) {
                 <div
                     className={`flex items-center justify-between p-4 border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
                     <div className="flex-1">
-                        <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                            Notificationlar
-                        </h3>
+                        <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Notificationlar</h3>
                         {unreadCount > 0 && (
-                            <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                {unreadCount} o'qilmagan
-                            </p>
+                            <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{unreadCount} o'qilmagan</p>
                         )}
                     </div>
-                    <button
-                        onClick={onClose}
-                        className={`p-2 rounded-full transition ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-slate-700' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                    >
+                    <button onClick={onClose}
+                            className={`p-2 rounded-full transition ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-slate-700' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>
                         <X className="w-6 h-6"/>
                     </button>
                 </div>
@@ -123,21 +116,15 @@ export default function NotificationsPanel({onClose}) {
                     <div
                         className={`flex gap-2 p-3 border-b ${isDarkMode ? 'border-slate-700 bg-slate-750' : 'border-gray-200 bg-gray-50'}`}>
                         {unreadCount > 0 && (
-                            <button
-                                onClick={markAllAsRead}
-                                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}
-                            >
-                                <CheckCheck className="w-4 h-4"/>
-                                Hamma o'qilgan
+                            <button onClick={markAllAsRead}
+                                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}>
+                                <CheckCheck className="w-4 h-4"/> Hamma o'qilgan
                             </button>
                         )}
                         {notifications.length > 0 && (
-                            <button
-                                onClick={deleteAllNotifications}
-                                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${isDarkMode ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
-                            >
-                                <Trash2 className="w-4 h-4"/>
-                                Hamma o'chir
+                            <button onClick={deleteAllNotifications}
+                                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${isDarkMode ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}>
+                                <Trash2 className="w-4 h-4"/> Hamma o'chir
                             </button>
                         )}
                     </div>
@@ -152,19 +139,13 @@ export default function NotificationsPanel({onClose}) {
                         </div>
                     ) : (
                         notifications.map((notif) => (
-                            <div
-                                key={notif.id}
-                                onClick={() => markAsRead(notif.id)}
-                                className={`p-4 border-b cursor-pointer transition ${notif.read ? (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100') : (isDarkMode ? 'bg-slate-700/50 border-slate-700' : 'bg-blue-50 border-gray-100')} hover:${isDarkMode ? 'bg-slate-700' : 'bg-gray-50'}`}
-                            >
+                            <div key={notif.id} onClick={() => markAsRead(notif.id)}
+                                 className={`p-4 border-b cursor-pointer transition ${notif.read ? (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100') : (isDarkMode ? 'bg-slate-700/50 border-slate-700' : 'bg-blue-50 border-gray-100')} hover:${isDarkMode ? 'bg-slate-700' : 'bg-gray-50'}`}>
                                 <div className="flex gap-3">
                                     <div className="flex-shrink-0">
                                         {notif.userAvatar ? (
-                                            <img
-                                                src={notif.userAvatar}
-                                                alt={notif.userName}
-                                                className="w-10 h-10 rounded-full object-cover"
-                                            />
+                                            <img src={notif.userAvatar} alt={notif.userName}
+                                                 className="w-10 h-10 rounded-full object-cover"/>
                                         ) : (
                                             <div
                                                 className={`w-10 h-10 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>
@@ -172,31 +153,21 @@ export default function NotificationsPanel({onClose}) {
                                             </div>
                                         )}
                                     </div>
-
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-start justify-between">
                                             <div className="flex-1">
-                                                <p className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                                    {getNotificationMessage(notif)}
-                                                </p>
-                                                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                                                    {formatTime(notif.timestamp)}
-                                                </p>
+                                                <p className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{getNotificationMessage(notif)}</p>
+                                                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{formatTime(notif.timestamp)}</p>
                                             </div>
-                                            {!notif.read && (
-                                                <div
-                                                    className="w-2 h-2 rounded-full bg-blue-500 ml-2 mt-1.5 flex-shrink-0"/>
-                                            )}
+                                            {!notif.read && <div
+                                                className="w-2 h-2 rounded-full bg-blue-500 ml-2 mt-1.5 flex-shrink-0"/>}
                                         </div>
                                     </div>
-
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteNotification(notif.id);
-                                        }}
-                                        className={`p-2 rounded-lg transition ${isDarkMode ? 'text-gray-500 hover:text-red-400 hover:bg-slate-700' : 'text-gray-400 hover:text-red-600 hover:bg-gray-100'}`}
-                                    >
+                                    <button onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteNotification(notif.id);
+                                    }}
+                                            className={`p-2 rounded-lg transition ${isDarkMode ? 'text-gray-500 hover:text-red-400 hover:bg-slate-700' : 'text-gray-400 hover:text-red-600 hover:bg-gray-100'}`}>
                                         <X className="w-4 h-4"/>
                                     </button>
                                 </div>

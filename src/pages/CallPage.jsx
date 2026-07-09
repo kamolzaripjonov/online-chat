@@ -53,11 +53,8 @@ export default function CallPage({otherUserId, callType, onClose}) {
                 setDuration((prev) => prev + 1);
             }, 1000);
         }
-
         return () => {
-            if (durationRef.current) {
-                clearInterval(durationRef.current);
-            }
+            if (durationRef.current) clearInterval(durationRef.current);
         };
     }, [status]);
 
@@ -78,19 +75,13 @@ export default function CallPage({otherUserId, callType, onClose}) {
         <div className="fixed inset-0 bg-slate-900 flex flex-col z-50">
             <div className="flex-1 relative flex items-center justify-center">
                 <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900">
-                    <img
-                        src={otherUser?.avatar_url}
-                        alt={otherUser?.username}
-                        className="w-full h-full object-cover opacity-30"
-                    />
+                    <img src={otherUser?.avatar_url} alt={otherUser?.username}
+                         className="w-full h-full object-cover opacity-30"/>
                 </div>
 
                 <div className="absolute top-8 left-5 flex items-center gap-3">
-                    <img
-                        src={otherUser?.avatar_url}
-                        alt={otherUser?.username}
-                        className="w-12 h-12 rounded-full border-2 border-white/20"
-                    />
+                    <img src={otherUser?.avatar_url} alt={otherUser?.username}
+                         className="w-12 h-12 rounded-full border-2 border-white/20"/>
                     <div>
                         <p className="text-white font-semibold text-lg">{otherUser?.full_name}</p>
                         <div className="flex items-center gap-2">
@@ -118,9 +109,7 @@ export default function CallPage({otherUserId, callType, onClose}) {
                             <img src={otherUser?.avatar_url} alt={otherUser?.username}
                                  className="w-32 h-32 rounded-full"/>
                         </div>
-                        <p className="text-white text-xl mt-6">
-                            {callType === 'video' ? 'Video Calling...' : 'Calling...'}
-                        </p>
+                        <p className="text-white text-xl mt-6">{callType === 'video' ? 'Video Calling...' : 'Calling...'}</p>
                     </div>
                 )}
             </div>
@@ -128,26 +117,20 @@ export default function CallPage({otherUserId, callType, onClose}) {
             <div className="p-6 flex items-center justify-center gap-4 bg-gradient-to-t from-black/50 to-transparent">
                 {status === 'connected' && (
                     <>
-                        <button
-                            onClick={() => setIsMuted(!isMuted)}
-                            className={`p-4 rounded-full transition ${isMuted ? 'bg-red-500 text-white' : 'bg-slate-700 text-white hover:bg-slate-600'}`}
-                        >
+                        <button onClick={() => setIsMuted(!isMuted)}
+                                className={`p-4 rounded-full transition ${isMuted ? 'bg-red-500 text-white' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>
                             {isMuted ? <MicOff className="w-6 h-6"/> : <Mic className="w-6 h-6"/>}
                         </button>
                         {callType === 'video' && (
-                            <button
-                                onClick={() => setIsVideoEnabled(!isVideoEnabled)}
-                                className={`p-4 rounded-full transition ${isVideoEnabled ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-red-500 text-white'}`}
-                            >
+                            <button onClick={() => setIsVideoEnabled(!isVideoEnabled)}
+                                    className={`p-4 rounded-full transition ${isVideoEnabled ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-red-500 text-white'}`}>
                                 {isVideoEnabled ? <Video className="w-6 h-6"/> : <VideoOff className="w-6 h-6"/>}
                             </button>
                         )}
                     </>
                 )}
-                <button
-                    onClick={endCall}
-                    className="p-5 bg-red-500 hover:bg-red-600 text-white rounded-full transition"
-                >
+                <button onClick={endCall}
+                        className="p-5 bg-red-500 hover:bg-red-600 text-white rounded-full transition">
                     <PhoneOff className="w-7 h-7"/>
                 </button>
             </div>

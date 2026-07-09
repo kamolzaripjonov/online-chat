@@ -1,329 +1,247 @@
 import React, {useState, useEffect} from 'react';
 import {useAuth} from '../contexts/AuthContext';
-import {useLanguage} from '../contexts/LanguageContext';
 import {useTheme} from '../contexts/ThemeContext';
-import {Heart, MessageCircle, Send, Bookmark, Eye} from 'lucide-react';
+import {Heart, MessageCircle, Send, Bookmark, Eye, MoreHorizontal, Share2} from 'lucide-react';
+import {useNavigate} from 'react-router-dom';
+import api from '../api/api';
+import {useLanguage} from '../contexts/LanguageContext';
 
 export default function PostCard({post, onRefresh}) {
-    const {user, profile} = useAuth();
-    const {t} = useLanguage();
+    const {user} = useAuth();
     const {isDarkMode} = useTheme();
+    const {t} = useLanguage();
+    const navigate = useNavigate();
 
     const [isLiked, setIsLiked] = useState(false);
     const [likesCount, setLikesCount] = useState(0);
+    const [isSaved, setIsSaved] = useState(false);
     const [viewsCount, setViewsCount] = useState(0);
-    const [likedBy, setLikedBy] = useState([]);
     const [comments, setComments] = useState([]);
     const [showComments, setShowComments] = useState(false);
     const [commentInput, setCommentInput] = useState('');
-    const [replyingTo, setReplyingTo] = useState(null);
-    const [replyInput, setReplyInput] = useState('');
     const [submitting, setSubmitting] = useState(false);
-    const [lastComment, setLastComment] = useState('');
+    const [showShareMenu, setShowShareMenu] = useState(false);
+    const [likedUsers, setLikedUsers] = useState([]);
 
     useEffect(() => {
-        setLikesCount(post.likes_count || 0);
-        setViewsCount(post.views_count || 0);
-        setLikedBy(post.liked_by || []);
-        setIsLiked(post.liked_by?.some(u => u.id === user?.id) || false);
-    }, [post, user?.id]);
-
-    useEffect(() => {
-        if (user && post.user_id !== user.id) {
-            const viewedPosts = JSON.parse(localStorage.getItem('manga_viewed_posts') || '[]');
-            if (!viewedPosts.includes(post.id)) {
-                viewedPosts.push(post.id);
-                localStorage.setItem('manga_viewed_posts', JSON.stringify(viewedPosts));
-                const stored = localStorage.getItem('manga_posts');
-                const posts = stored ? JSON.parse(stored) : [];
-                const postIndex = posts.findIndex(p => p.id === post.id);
-                if (postIndex !== -1) {
-                    posts[postIndex].views_count = (posts[postIndex].views_count || 0) + 1;
-                    localStorage.setItem('manga_posts', JSON.stringify(posts));
-                    setViewsCount(posts[postIndex].views_count);
-                }
-            }
+        if (post) {
+            setLikesCount(post.likesCount || post.likes_count || post.likes?.length || 0);
+            setViewsCount(post.viewsCount || post.views_count || 0);
+            const userId = user?.id || user?._id;
+            setIsLiked(post.isLiked || post.liked_by?.some(u => u.id === userId || u._id === userId) || false);
+            setIsSaved(post.isSaved || post.saved_by?.some(u => u.id === userId || u._id === userId) || false);
+            setLikedUsers(post.liked_by || []);
         }
-    }, [post.id, post.user_id, user]);
+    }, [post, user]);
 
     useEffect(() => {
         if (showComments) loadComments();
     }, [showComments]);
 
-    const loadComments = () => {
-        const stored = localStorage.getItem('manga_comments');
-        const allComments = stored ? JSON.parse(stored) : [];
-        const postComments = allComments.filter(c => c.post_id === post.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        setComments(postComments);
-    };
-
-    const handleLike = () => {
-        if (!user) return;
-        const stored = localStorage.getItem('manga_posts');
-        const posts = stored ? JSON.parse(stored) : [];
-        const postIndex = posts.findIndex(p => p.id === post.id);
-        if (postIndex === -1) return;
-        const userLike = {id: user.id, username: profile.username, avatar_url: profile.avatar_url};
-        if (isLiked) {
-            posts[postIndex].liked_by = posts[postIndex].liked_by.filter(u => u.id !== user.id);
-            posts[postIndex].likes_count = Math.max(0, (posts[postIndex].likes_count || 1) - 1);
-            setLikesCount(posts[postIndex].likes_count);
-            setLikedBy(posts[postIndex].liked_by);
-        } else {
-            if (!posts[postIndex].liked_by) posts[postIndex].liked_by = [];
-            posts[postIndex].liked_by.push(userLike);
-            posts[postIndex].likes_count = (posts[postIndex].likes_count || 0) + 1;
-            setLikesCount(posts[postIndex].likes_count);
-            setLikedBy(posts[postIndex].liked_by);
-            if (post.user_id !== user.id) createNotification('like', post);
+    const loadComments = async () => {
+        try {
+            const response = await api.comments.list(post._id || post.id);
+            setComments(response.data || response || []);
+        } catch (error) {
+            console.error('Error loading comments:', error);
+            setComments([]);
         }
-        localStorage.setItem('manga_posts', JSON.stringify(posts));
-        setIsLiked(!isLiked);
     };
 
-    const createNotification = (type, post, comment = null) => {
-        const stored = localStorage.getItem('manga_notifications');
-        const notifications = stored ? JSON.parse(stored) : [];
-        notifications.unshift({
-            id: `notif-${Date.now()}`,
-            type,
-            from_user: {id: user.id, username: profile.username, avatar_url: profile.avatar_url},
-            post_id: post.id,
-            comment_id: comment?.id,
-            for_user_id: post.user_id,
-            content: type === 'comment' ? comment?.content : null,
-            created_at: new Date().toISOString(),
-            read: false,
-        });
-        localStorage.setItem('manga_notifications', JSON.stringify(notifications));
+    const goToProfile = (userId, username) => {
+        if (!userId) return;
+        if (userId === user?.id || userId === user?._id) navigate('/profile');
+        else if (username) navigate(`/profile/${username}`);
+        else navigate(`/profile/${userId}`);
     };
 
-    const handleComment = (e) => {
+    const handleLike = async () => {
+        if (!user) return;
+        try {
+            await api.posts.toggleLike(post._id || post.id);
+            setIsLiked(!isLiked);
+            setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
+        } catch (error) {
+            console.error('Like error:', error);
+        }
+    };
+
+    const handleSave = async () => {
+        if (!user) return;
+        try {
+            await api.posts.toggleSave(post._id || post.id);
+            setIsSaved(!isSaved);
+        } catch (error) {
+            console.error('Save error:', error);
+        }
+    };
+
+    const handleComment = async (e) => {
         e.preventDefault();
         if (!user || !commentInput.trim() || submitting) return;
-        if (commentInput.trim() === lastComment) {
-            setCommentInput('');
-            return;
-        }
         setSubmitting(true);
-        const newComment = {
-            id: `comment-${Date.now()}`,
-            post_id: post.id,
-            user_id: user.id,
-            content: commentInput.trim(),
-            created_at: new Date().toISOString(),
-            profiles: {id: user.id, username: profile.username, avatar_url: profile.avatar_url},
-            replies: [],
-        };
-        const stored = localStorage.getItem('manga_comments');
-        const allComments = stored ? JSON.parse(stored) : [];
-        allComments.unshift(newComment);
-        localStorage.setItem('manga_comments', JSON.stringify(allComments));
-        const posts = JSON.parse(localStorage.getItem('manga_posts') || '[]');
-        const postIndex = posts.findIndex(p => p.id === post.id);
-        if (postIndex !== -1) {
-            posts[postIndex].comments_count = (posts[postIndex].comments_count || 0) + 1;
-            localStorage.setItem('manga_posts', JSON.stringify(posts));
+        try {
+            await api.comments.add(post._id || post.id, commentInput.trim());
+            setCommentInput('');
+            await loadComments();
+            onRefresh?.();
+        } catch (error) {
+            console.error('Comment error:', error);
+        } finally {
+            setSubmitting(false);
         }
-        if (post.user_id !== user.id) createNotification('comment', post, newComment);
-        setLastComment(commentInput.trim());
-        setComments([newComment, ...allComments.filter(c => c.post_id === post.id)]);
-        setCommentInput('');
-        setSubmitting(false);
     };
 
-    const handleReply = (e, commentId, forUserId) => {
-        e.preventDefault();
-        if (!replyInput.trim() || submitting) return;
-        setSubmitting(true);
-        const reply = {
-            id: `reply-${Date.now()}`,
-            comment_id: commentId,
-            user_id: user.id,
-            content: replyInput.trim(),
-            created_at: new Date().toISOString(),
-            profiles: {id: user.id, username: profile.username, avatar_url: profile.avatar_url},
-        };
-        const stored = localStorage.getItem('manga_comments');
-        const allComments = stored ? JSON.parse(stored) : [];
-        const commentIndex = allComments.findIndex(c => c.id === commentId);
-        if (commentIndex !== -1) {
-            if (!allComments[commentIndex].replies) allComments[commentIndex].replies = [];
-            allComments[commentIndex].replies.unshift(reply);
-            localStorage.setItem('manga_comments', JSON.stringify(allComments));
-            if (forUserId !== user.id) {
-                const storedNotifs = localStorage.getItem('manga_notifications');
-                const notifications = storedNotifs ? JSON.parse(storedNotifs) : [];
-                notifications.unshift({
-                    id: `notif-${Date.now()}`,
-                    type: 'reply',
-                    from_user: reply.profiles,
-                    comment_id: commentId,
-                    for_user_id: forUserId,
-                    content: reply.content,
-                    created_at: new Date().toISOString(),
-                    read: false,
+    const handleShare = async () => {
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: 'Check out this post!',
+                    text: post.caption || '',
+                    url: window.location.href
                 });
-                localStorage.setItem('manga_notifications', JSON.stringify(notifications));
+            } else {
+                await navigator.clipboard.writeText(window.location.href);
+                alert('Link copied to clipboard!');
             }
+        } catch (error) {
+            console.error('Share error:', error);
         }
-        loadComments();
-        setReplyInput('');
-        setReplyingTo(null);
-        setSubmitting(false);
+        setShowShareMenu(false);
     };
 
     const timeAgo = (date) => {
+        if (!date) return '';
         const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-        if (seconds < 60) return 'just now';
+        if (seconds < 60) return 'now';
         if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
         if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-        return `${Math.floor(seconds / 86400)}d`;
+        if (seconds < 604800) return `${Math.floor(seconds / 86400)}d`;
+        return new Date(date).toLocaleDateString();
     };
+
+    const postUser = post.user || post.profiles || post.author || {};
+    const avatar = postUser.avatar || postUser.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${postUser.username || 'default'}`;
+    const userId = postUser.id || postUser._id;
+    const username = postUser.username;
 
     return (
         <article
-            className={`${isDarkMode ? 'bg-slate-900 border-b border-slate-800 sm:rounded-xl sm:border' : 'bg-white border-b border-gray-100 sm:rounded-xl sm:border sm:shadow-sm'}`}>
+            className={`mb-4 rounded-xl overflow-hidden ${isDarkMode ? 'bg-slate-900 border border-slate-800' : 'bg-white border border-gray-200'}`}>
             <div className="flex items-center justify-between p-3">
-                <div className="flex items-center gap-3">
-                    <img src={post.profiles.avatar_url} alt=""
-                         className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover"/>
+                <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition"
+                     onClick={() => goToProfile(userId, username)}>
+                    <img src={avatar} alt="" className="w-9 h-9 rounded-full object-cover"/>
                     <div>
-                        <p className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{post.profiles.username}</p>
-                        <p className="text-gray-500 text-xs">{timeAgo(post.created_at)}</p>
+                        <p className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{username || 'Unknown'}</p>
+                        <p className="text-gray-500 text-xs">{timeAgo(post.createdAt || post.created_at)}</p>
                     </div>
                 </div>
                 <button
-                    className={`p-2 rounded-full transition ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>•••
-                </button>
+                    className={`p-2 rounded-full transition ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <MoreHorizontal className="w-5 h-5"/></button>
             </div>
 
-            {post.media_url && (
+            {post.mediaUrl || post.media_url || post.media?.[0]?.url ? (
                 <div className="aspect-square bg-black">
-                    {post.media_type === 'image' ? (
-                        <img src={post.media_url} alt="" className="w-full h-full object-cover" loading="lazy"/>
+                    {post.mediaType === 'video' || post.media_type === 'video' || post.media?.[0]?.type === 'video' ? (
+                        <video src={post.mediaUrl || post.media_url || post.media[0].url}
+                               className="w-full h-full object-cover" controls playsInline/>
                     ) : (
-                        <video src={post.media_url} className="w-full h-full object-cover" controls playsInline/>
+                        <img src={post.mediaUrl || post.media_url || post.media[0].url} alt=""
+                             className="w-full h-full object-cover" loading="lazy"/>
                     )}
                 </div>
-            )}
+            ) : null}
 
             {post.caption && (
                 <div className="px-3 pt-3">
                     <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                        <span className="font-semibold">{post.profiles.username}</span>{' '}
-                        {post.caption}
+                        <span className="font-semibold cursor-pointer hover:underline"
+                              onClick={() => goToProfile(userId, username)}>{username || 'Unknown'}</span> {post.caption}
                     </p>
                 </div>
             )}
 
-            {viewsCount > 0 && (
-                <div className="px-3 py-2 flex items-center gap-1 text-xs text-gray-500">
-                    <Eye className="w-3.5 h-3.5"/>
-                    <span>{viewsCount} {t('views')}</span>
-                </div>
-            )}
+            {viewsCount > 0 && <div className="px-3 py-1 flex items-center gap-1 text-xs text-gray-500"><Eye
+                className="w-3.5 h-3.5"/><span>{viewsCount} views</span></div>}
 
             <div className="flex items-center justify-between px-3 py-2">
                 <div className="flex items-center gap-4">
                     <button onClick={handleLike}
                             className={`transition touch-manipulation ${isLiked ? 'text-red-500' : isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                        <Heart className={`w-7 h-7 ${isLiked ? 'fill-current' : ''}`}/>
-                    </button>
+                        <Heart className={`w-6 h-6 ${isLiked ? 'fill-current' : ''}`}/></button>
                     <button onClick={() => setShowComments(!showComments)}
                             className={`transition touch-manipulation ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                        <MessageCircle className="w-7 h-7"/>
+                        <MessageCircle className="w-6 h-6"/></button>
+                    <button onClick={() => setShowShareMenu(!showShareMenu)}
+                            className={`transition touch-manipulation ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        <Share2 className="w-6 h-6"/></button>
+                </div>
+                <button onClick={handleSave}
+                        className={`transition touch-manipulation ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                    <Bookmark className={`w-6 h-6 ${isSaved ? 'fill-current' : ''}`}/></button>
+            </div>
+
+            {showShareMenu && (
+                <div className={`px-3 py-2 border-t ${isDarkMode ? 'border-slate-800' : 'border-gray-100'}`}>
+                    <button onClick={handleShare}
+                            className={`w-full py-2 text-sm font-medium rounded-lg transition ${isDarkMode ? 'hover:bg-slate-800 text-white' : 'hover:bg-gray-100 text-gray-900'}`}>Share
+                        Post
                     </button>
-                    <button className={`transition touch-manipulation ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                        <Send className="w-7 h-7"/>
+                    <button onClick={() => setShowShareMenu(false)}
+                            className={`w-full py-2 text-sm font-medium rounded-lg transition ${isDarkMode ? 'hover:bg-slate-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>Cancel
                     </button>
                 </div>
-                <button className={`transition touch-manipulation ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                    <Bookmark className="w-7 h-7"/>
-                </button>
-            </div>
+            )}
 
             {likesCount > 0 && (
                 <div className="px-3 pb-1">
-                    <p className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{likesCount.toLocaleString()} {t('likes')}</p>
+                    <p className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{likesCount.toLocaleString()} likes</p>
+                    {likedUsers.length > 0 && <p className="text-xs text-gray-500">Liked
+                        by {likedUsers.slice(0, 3).map(u => u.username).join(', ')}{likedUsers.length > 3 && ` and ${likedUsers.length - 3} others`}</p>}
                 </div>
             )}
 
             {showComments && (
                 <div className={`border-t ${isDarkMode ? 'border-slate-800' : 'border-gray-100'}`}>
                     <div className="max-h-60 overflow-y-auto p-3 space-y-3">
-                        {comments.length === 0 ? (
-                            <p className="text-gray-500 text-sm text-center py-4">No comments yet</p>
-                        ) : (
-                            comments.map((comment) => (
-                                <div key={comment.id}>
-                                    <div className="flex gap-2.5">
-                                        <img src={comment.profiles.avatar_url} alt=""
-                                             className="w-8 h-8 rounded-full flex-shrink-0"/>
-                                        <div className="flex-1 min-w-0">
-                                            <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                                <span className="font-semibold">{comment.profiles.username}</span>{' '}
-                                                {comment.content}
-                                            </p>
-                                            <div className="flex items-center gap-3 mt-1">
-                                                <p className="text-xs text-gray-500">{timeAgo(comment.created_at)}</p>
-                                                <button onClick={() => setReplyingTo(comment.id)}
-                                                        className="text-xs font-medium text-gray-500 hover:text-gray-700 transition">{t('reply')}</button>
-                                            </div>
-                                            {comment.replies && comment.replies.length > 0 && (
-                                                <div className="mt-2 ml-2 space-y-2">
-                                                    {comment.replies.map((reply) => (
-                                                        <div key={reply.id} className="flex gap-2">
-                                                            <img src={reply.profiles.avatar_url} alt=""
-                                                                 className="w-6 h-6 rounded-full flex-shrink-0"/>
-                                                            <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                                                <span
-                                                                    className="font-semibold">{reply.profiles.username}</span>{' '}
-                                                                {reply.content}
-                                                                <span
-                                                                    className="text-xs text-gray-500 ml-2">{timeAgo(reply.created_at)}</span>
-                                                            </p>
-                                                        </div>
-                                                    ))}
+                        {comments.length === 0 ?
+                            <p className="text-gray-500 text-sm text-center py-4">No comments yet</p> : (
+                                comments.map((comment) => {
+                                    const commentUser = comment.user || comment.profiles || {};
+                                    const commentUserId = commentUser.id || commentUser._id;
+                                    const commentUsername = commentUser.username;
+                                    const commentAvatar = commentUser.avatar || commentUser.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${commentUsername || 'default'}`;
+                                    return (
+                                        <div key={comment._id || comment.id} className="flex gap-2.5">
+                                            <img src={commentAvatar} alt=""
+                                                 className="w-8 h-8 rounded-full flex-shrink-0 cursor-pointer hover:opacity-80 transition"
+                                                 onClick={() => goToProfile(commentUserId, commentUsername)}/>
+                                            <div className="flex-1 min-w-0">
+                                                <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                                    <span className="font-semibold cursor-pointer hover:underline"
+                                                          onClick={() => goToProfile(commentUserId, commentUsername)}>{commentUsername || 'Unknown'}</span> {comment.content}
+                                                </p>
+                                                <div className="flex items-center gap-3 mt-0.5">
+                                                    <p className="text-xs text-gray-500">{timeAgo(comment.createdAt || comment.created_at)}</p>
+                                                    <button
+                                                        className="text-xs text-gray-500 hover:text-gray-700 font-medium">Reply
+                                                    </button>
                                                 </div>
-                                            )}
-                                            {replyingTo === comment.id && (
-                                                <form onSubmit={(e) => handleReply(e, comment.id, comment.user_id)}
-                                                      className="mt-2">
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="text"
-                                                            value={replyInput}
-                                                            onChange={(e) => setReplyInput(e.target.value)}
-                                                            placeholder={`${t('reply')}...`}
-                                                            className={`flex-1 px-3 py-2 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-slate-800 text-white placeholder-gray-500' : 'bg-gray-100 text-gray-900 placeholder-gray-500'}`}
-                                                            autoFocus
-                                                        />
-                                                        <button type="submit"
-                                                                disabled={!replyInput.trim() || submitting}
-                                                                className="text-blue-500 font-semibold text-sm disabled:opacity-50">Post
-                                                        </button>
-                                                    </div>
-                                                </form>
-                                            )}
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
-                            ))
-                        )}
+                                    );
+                                })
+                            )}
                     </div>
                     <form onSubmit={handleComment}
                           className={`flex gap-2 p-3 border-t ${isDarkMode ? 'border-slate-800' : 'border-gray-100'}`}>
-                        <input
-                            type="text"
-                            value={commentInput}
-                            onChange={(e) => setCommentInput(e.target.value)}
-                            placeholder={t('addComment')}
-                            className={`flex-1 px-4 py-2.5 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-slate-800 text-white placeholder-gray-500' : 'bg-gray-100 text-gray-900 placeholder-gray-500'}`}
-                        />
+                        <input type="text" value={commentInput} onChange={(e) => setCommentInput(e.target.value)}
+                               placeholder="Add a comment..."
+                               className={`flex-1 px-4 py-2 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-slate-800 text-white placeholder-gray-500' : 'bg-gray-100 text-gray-900 placeholder-gray-400'}`}/>
                         <button type="submit" disabled={!commentInput.trim() || submitting}
-                                className="text-blue-500 font-semibold text-sm disabled:opacity-50">Post
-                        </button>
+                                className="text-blue-500 font-semibold text-sm disabled:opacity-50 transition hover:text-blue-600">{submitting ? '...' : 'Post'}</button>
                     </form>
                 </div>
             )}

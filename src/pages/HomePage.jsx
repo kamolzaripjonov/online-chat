@@ -1,64 +1,112 @@
-import {useState, useEffect} from 'react';
-import api from '../service/api';
-import PostCard from "../components/PostCard.jsx";
+import React, {useState, useEffect} from 'react';
+import {useAuth} from '../contexts/AuthContext';
+import {useTheme} from '../contexts/ThemeContext';
+import StoriesBar from '../components/StoriesBar';
+import StoryViewer from '../components/StoryViewer';
+import PostCard from '../components/PostCard';
+import CreatePostPage from './CreatePostPage';
+import CreateStoryPage from './CreateStoryPage';
 
-const HomePage = () => {
+export default function HomePage() {
+    const {user} = useAuth();
+    const {isDarkMode} = useTheme();
+
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const [storyViewerOpen, setStoryViewerOpen] = useState(false);
+    const [selectedUserId, setSelectedUserId] = useState(null);
+    const [selectedStoryIndex, setSelectedStoryIndex] = useState(0);
+
+    const [createPostOpen, setCreatePostOpen] = useState(false);
+    const [createStoryOpen, setCreateStoryOpen] = useState(false);
+
     useEffect(() => {
-        const fetchPosts = async () => {
-            try {
-                setLoading(true);
-                const response = await api.get('/posts');
-                setPosts(response.data);
-                setError(null);
-            } catch (err) {
-                setError('Postlarni yuklashda xatolik');
-                console.error('Posts fetch error:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchPosts();
+        loadPosts();
     }, []);
 
-    const createPost = async (content, image) => {
+    const loadPosts = () => {
         try {
-            const response = await api.post('/posts', {content, image});
-            setPosts([response.data, ...posts]);
-            return {success: true};
-        } catch (error) {
-            return {success: false, error: error.response?.data?.message};
+            setLoading(true);
+            const stored = localStorage.getItem('manga_posts');
+            const postsData = stored ? JSON.parse(stored) : [];
+            if (Array.isArray(postsData)) {
+                setPosts(postsData);
+            } else {
+                console.warn('Posts not an array:', postsData);
+                setPosts([]);
+            }
+            setError(null);
+        } catch (err) {
+            console.error('Error loading posts:', err);
+            setError('Failed to load posts');
+            setPosts([]);
+        } finally {
+            setLoading(false);
         }
     };
 
-    // Postni o'chirish
-    const deletePost = async (postId) => {
-        try {
-            await api.delete(`/posts/${postId}`);
-            setPosts(posts.filter(post => post._id !== postId));
-            return {success: true};
-        } catch (error) {
-            return {success: false, error: error.response?.data?.message};
-        }
+    const handleRefresh = () => loadPosts();
+
+    const handleOpenStory = (userId, index) => {
+        setSelectedUserId(userId);
+        setSelectedStoryIndex(index || 0);
+        setStoryViewerOpen(true);
     };
 
-    if (loading) return <div className="loading-spinner">Yuklanmoqda...</div>;
-    if (error) return <div className="error-message">{error}</div>;
+    const handleCloseStory = () => {
+        setStoryViewerOpen(false);
+        setSelectedUserId(null);
+        setSelectedStoryIndex(0);
+    };
+
+    const handleOpenCreateStory = () => setCreateStoryOpen(true);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"/>
+            </div>
+        );
+    }
 
     return (
-        <div className="home-page">
-            {posts.map(post => (
-                <PostCard
-                    key={post._id}
-                    post={post}
-                    onDelete={deletePost}
-                />
-            ))}
+        <div className="max-w-2xl mx-auto">
+            <StoriesBar onOpenStory={handleOpenStory} onOpenCreateStory={handleOpenCreateStory}/>
+            <div className="px-4 py-3">
+                {error ? (
+                    <div className="text-center py-10">
+                        <p className="text-red-500 text-sm">{error}</p>
+                        <button onClick={handleRefresh}
+                                className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition">Retry
+                        </button>
+                    </div>
+                ) : !Array.isArray(posts) || posts.length === 0 ? (
+                    <div className="text-center py-16">
+                        <div className="text-6xl mb-4">📸</div>
+                        <p className="text-gray-500 text-lg">No posts yet</p>
+                        <p className="text-gray-400 text-sm mt-1">Be the first to share something!</p>
+                        <button onClick={() => setCreatePostOpen(true)}
+                                className="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">Create
+                            Post
+                        </button>
+                    </div>
+                ) : (
+                    posts.map((post) => <PostCard key={post.id || post._id} post={post} onRefresh={handleRefresh}/>)
+                )}
+            </div>
+
+            {storyViewerOpen && selectedUserId && (
+                <StoryViewer userId={selectedUserId} initialStoryIndex={selectedStoryIndex} onClose={handleCloseStory}
+                             onNextUser={handleCloseStory} onPrevUser={handleCloseStory}/>
+            )}
+
+            {createPostOpen && <CreatePostPage onClose={() => {
+                setCreatePostOpen(false);
+                handleRefresh();
+            }}/>}
+            {createStoryOpen && <CreateStoryPage onClose={() => setCreateStoryOpen(false)}/>}
         </div>
     );
-};
-
-export default HomePage;
+}

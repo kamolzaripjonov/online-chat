@@ -24,14 +24,6 @@ body {
     transition: background-color 0.3s ease;
 }
 
-body.dark-mode-bg {
-    background-color: #0f172a;
-}
-
-body.light-mode-bg {
-    background-color: #f9fafb;
-}
-
 .pb-safe {
     padding-bottom: max(env(safe-area-inset-bottom), 1rem);
 }

@@ -2,7 +2,6 @@ import React, {createContext, useContext, useState, useEffect} from 'react';
 
 const translations = {
     en: {
-        welcome: 'Welcome',
         signIn: 'Sign In',
         signUp: 'Sign Up',
         email: 'Email',
@@ -14,19 +13,16 @@ const translations = {
         haveAccount: 'Already have an account?',
         login: 'Login',
         register: 'Register',
-
         termsTitle: 'Terms and Privacy',
         termsText1: 'I agree to the Terms of Service and Privacy Policy',
         termsText2: 'I agree to receive promotional emails',
         termsText3: 'I confirm that I am at least 13 years old',
         agreeAll: 'Agree to All',
-
         home: 'Home',
         explore: 'Explore',
         create: 'Create',
         chat: 'Chat',
         profile: 'Profile',
-
         createPost: 'Create Post',
         createStory: 'Create Story',
         addPhoto: 'Add Photo or Video',
@@ -45,7 +41,6 @@ const translations = {
         noPosts: 'No posts yet',
         noStories: 'No stories yet',
         beFirst: 'Be the first to share something!',
-
         editProfile: 'Edit Profile',
         followers: 'Followers',
         following: 'Following',
@@ -67,13 +62,11 @@ const translations = {
         totalLikes: 'Total Likes',
         totalComments: 'Total Comments',
         activityLog: 'Activity',
-
         newNotif: 'New Notification',
         likedYourPost: 'liked your post',
         commentedOnYourPost: 'commented on your post',
         repliedToComment: 'replied to your comment',
         noNotifications: 'No notifications yet',
-
         calling: 'Calling...',
         videoCall: 'Video Call',
         voiceCall: 'Voice Call',
@@ -82,17 +75,17 @@ const translations = {
         unmute: 'Unmute',
         videoOn: 'Video On',
         videoOff: 'Video Off',
-
         settings: 'Settings',
         upgradePremium: 'Upgrade to Premium',
         unlimitedCalls: 'Unlimited video calls & more',
-
         noConversations: 'No conversations yet',
         startChat: 'Search users to start chatting!',
         typeMessage: 'Type a message...',
-    },
-    ru: {
-        welcome: 'Добро пожаловать',
+        planFree: 'Free Plan',
+        months6: '6 months',
+        planExpires: 'Expires',
+        expired: 'Expired',
+    }, ru: {
         signIn: 'Войти',
         signUp: 'Регистрация',
         email: 'Электронная почта',
@@ -104,19 +97,16 @@ const translations = {
         haveAccount: 'Уже есть аккаунт?',
         login: 'Войти',
         register: 'Зарегистрироваться',
-
         termsTitle: 'Условия и конфиденциальность',
         termsText1: 'Я принимаю Условия использования и Политику конфиденциальности',
         termsText2: 'Я согласен получать рекламные электронные письма',
         termsText3: 'Подтверждаю, что мне не менее 13 лет',
         agreeAll: 'Принять всё',
-
         home: 'Главная',
         explore: 'Обзор',
         create: 'Создать',
         chat: 'Чат',
         profile: 'Профиль',
-
         createPost: 'Создать пост',
         createStory: 'Создать историю',
         addPhoto: 'Добавить фото или видео',
@@ -135,7 +125,6 @@ const translations = {
         noPosts: 'Пока нет постов',
         noStories: 'Пока нет историй',
         beFirst: 'Станьте первым, кто поделится!',
-
         editProfile: 'Редактировать профиль',
         followers: 'Подписчики',
         following: 'Подписки',
@@ -157,13 +146,11 @@ const translations = {
         totalLikes: 'Всего лайков',
         totalComments: 'Всего комментариев',
         activityLog: 'Активность',
-
         newNotif: 'Новое уведомление',
         likedYourPost: 'оценил ваш пост',
         commentedOnYourPost: 'прокомментировал ваш пост',
         repliedToComment: 'ответил на ваш комментарий',
         noNotifications: 'Нет уведомлений',
-
         calling: 'Звонок...',
         videoCall: 'Видеозвонок',
         voiceCall: 'Голосовой звонок',
@@ -172,48 +159,36 @@ const translations = {
         unmute: 'Включить микрофон',
         videoOn: 'Включить камеру',
         videoOff: 'Выключить камеру',
-
         settings: 'Настройки',
         upgradePremium: 'Обновить до Premium',
         unlimitedCalls: 'Безлимитные видеозвонки и многое другое',
-
         noConversations: 'Нет диалогов',
         startChat: 'Найдите пользователей для общения!',
         typeMessage: 'Введите сообщение...',
+        planFree: 'Бесплатный план',
+        months6: '6 месяцев',
+        planExpires: 'Истекает',
+        expired: 'Истёк',
     }
 };
 
 const LanguageContext = createContext(undefined);
 
 export function LanguageProvider({children}) {
-    const [language, setLanguage] = useState(() => {
-        const saved = localStorage.getItem('manga_language');
-        return saved || 'en';
-    });
-
+    const [language, setLanguage] = useState(() => localStorage.getItem('manga_language') || 'en');
     useEffect(() => {
         localStorage.setItem('manga_language', language);
     }, [language]);
 
-    const t = (key) => {
-        return translations[language][key] || key;
-    };
+    const t = (key) => translations[language]?.[key] || key;
+    const toggleLanguage = () => setLanguage(prev => prev === 'en' ? 'ru' : 'en');
 
-    const toggleLanguage = () => {
-        setLanguage(prev => prev === 'en' ? 'ru' : 'en');
-    };
-
-    return (
-        <LanguageContext.Provider value={{language, setLanguage, t, toggleLanguage}}>
-            {children}
-        </LanguageContext.Provider>
-    );
+    return <LanguageContext.Provider
+        value={{language, setLanguage, t, toggleLanguage}}>{children}</LanguageContext.Provider>;
 }
 
 export function useLanguage() {
     const context = useContext(LanguageContext);
-    if (!context) {
-        throw new Error('useLanguage must be used within LanguageProvider');
-    }
+    if (!context) throw new Error('useLanguage must be used within LanguageProvider');
     return context;
 }

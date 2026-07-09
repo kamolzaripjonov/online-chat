@@ -10,30 +10,17 @@ export function ThemeProvider({children}) {
 
     useEffect(() => {
         localStorage.setItem('manga_dark_mode', isDarkMode.toString());
-        if (isDarkMode) {
-            document.documentElement.classList.add('dark');
-            document.documentElement.classList.remove('light');
-        } else {
-            document.documentElement.classList.add('light');
-            document.documentElement.classList.remove('dark');
-        }
+        document.documentElement.classList.toggle('dark', isDarkMode);
+        document.documentElement.classList.toggle('light', !isDarkMode);
     }, [isDarkMode]);
 
-    const toggleTheme = () => {
-        setIsDarkMode(prev => !prev);
-    };
+    const toggleTheme = () => setIsDarkMode(prev => !prev);
 
-    return (
-        <ThemeContext.Provider value={{isDarkMode, setIsDarkMode, toggleTheme}}>
-            {children}
-        </ThemeContext.Provider>
-    );
+    return <ThemeContext.Provider value={{isDarkMode, setIsDarkMode, toggleTheme}}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {
     const context = useContext(ThemeContext);
-    if (!context) {
-        throw new Error('useTheme must be used within ThemeProvider');
-    }
+    if (!context) throw new Error('useTheme must be used within ThemeProvider');
     return context;
 }
