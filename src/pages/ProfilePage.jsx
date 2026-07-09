@@ -112,7 +112,6 @@ export default function ProfilePage({onOpenSettings}) {
                 </div>
             </div>
 
-            {/* Profile Info */}
             <div className="flex items-start gap-6 mb-6">
                 <img src={profile.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`}
                      alt={profile.username}
@@ -136,7 +135,6 @@ export default function ProfilePage({onOpenSettings}) {
                 </div>
             </div>
 
-            {/* Bio */}
             <div className="mb-6">
                 <p className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{profile.name || profile.username}</p>
                 {profile.bio &&
@@ -151,7 +149,6 @@ export default function ProfilePage({onOpenSettings}) {
                 </div>
             </div>
 
-            {/* Stats */}
             <div className={`rounded-xl p-4 mb-6 ${isDarkMode ? 'bg-slate-800' : 'bg-gray-100'}`}>
                 <h3 className={`font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t('accountStats')}</h3>
                 <div className="grid grid-cols-3 gap-4">
@@ -176,7 +173,6 @@ export default function ProfilePage({onOpenSettings}) {
                 </div>
             </div>
 
-            {/* Tabs */}
             <div className={`border-t ${isDarkMode ? 'border-slate-700' : 'border-gray-200'} flex`}>
                 <button onClick={() => setActiveTab('posts')}
                         className={`flex-1 py-3 text-sm font-semibold transition flex items-center justify-center gap-1 ${activeTab === 'posts' ? `${isDarkMode ? 'text-white border-t-2 border-white' : 'text-gray-900 border-t-2 border-gray-900'}` : `${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}`}>
@@ -188,7 +184,6 @@ export default function ProfilePage({onOpenSettings}) {
                 </button>
             </div>
 
-            {/* Content */}
             <div className="mt-4">
                 {loading ? (
                     <div className="grid grid-cols-3 gap-1">{[...Array(6)].map((_, i) => <div key={i}
@@ -229,7 +224,6 @@ export default function ProfilePage({onOpenSettings}) {
                 )}
             </div>
 
-            {/* Edit Profile Modal */}
             {editing && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className={`w-full max-w-md rounded-2xl p-6 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
@@ -277,7 +271,6 @@ export default function ProfilePage({onOpenSettings}) {
                 </div>
             )}
 
-            {/* Logout Confirmation Modal */}
             {showLogoutModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className={`w-full max-w-sm rounded-2xl p-6 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
