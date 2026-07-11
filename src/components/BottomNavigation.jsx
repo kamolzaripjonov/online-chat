@@ -1,51 +1,55 @@
-import React from 'react';
-import {useLanguage} from '../contexts/LanguageContext';
+import {Home, Compass, Plus, MessageCircle, User} from 'lucide-react';
 import {useTheme} from '../contexts/ThemeContext';
-import {Home, Search, PlusSquare, MessageCircle, User} from 'lucide-react';
 
 export default function BottomNavigation({activeTab, onTabChange}) {
-    const {t} = useLanguage();
     const {isDarkMode} = useTheme();
 
     const tabs = [
-        {id: 'home', icon: Home},
-        {id: 'search', icon: Search},
-        {id: 'create', icon: PlusSquare, isSpecial: true},
-        {id: 'chat', icon: MessageCircle},
-        {id: 'profile', icon: User},
+        {id: 'home', icon: Home, label: 'Home'},
+        {id: 'search', icon: Compass, label: 'Explore'},
+        {id: 'create', icon: Plus, label: 'Create', isCenter: true},
+        {id: 'chat', icon: MessageCircle, label: 'Chat'},
+        {id: 'profile', icon: User, label: 'Profile'},
     ];
 
     return (
         <nav
-            className={`fixed bottom-0 left-0 right-0 z-40 border-t pb-safe ${isDarkMode ? 'bg-slate-900/95 backdrop-blur-lg border-slate-800' : 'bg-white/95 backdrop-blur-lg border-gray-200'}`}>
-            <div className="flex items-center justify-around max-w-2xl mx-auto">
-                {tabs.map(({id, icon: Icon, isSpecial}) => (
-                    <button
-                        key={id}
-                        onClick={() => onTabChange(id)}
-                        className={`flex flex-col items-center justify-center py-2 px-4 sm:px-6 touch-manipulation transition-all ${
-                            activeTab === id
-                                ? `${isDarkMode ? 'text-white' : 'text-gray-900'}`
-                                : `${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`
-                        }`}
-                    >
-                        <div className={`p-2.5 rounded-xl transition-all ${
-                            isSpecial
-                                ? `bg-gradient-to-br ${isDarkMode ? 'from-blue-600 to-purple-600' : 'from-blue-500 to-purple-500'}`
-                                : activeTab === id
-                                    ? isDarkMode
-                                        ? 'bg-slate-800'
-                                        : 'bg-gray-100'
-                                    : ''
-                        }`}>
-                            <Icon className={`w-6 h-6 sm:w-7 sm:h-7 ${
-                                isSpecial ? 'text-white' : activeTab === id
-                                    ? isDarkMode ? 'text-white' : 'text-gray-900'
-                                    : ''
-                            }`}/>
-                        </div>
-                    </button>
-                ))}
+            className={`fixed bottom-0 left-0 right-0 z-30 ${isDarkMode ? 'bg-slate-900/90' : 'bg-white/90'} glass border-t ${isDarkMode ? 'border-slate-800' : 'border-gray-200'}`}>
+            <div className="flex items-center justify-around h-16 max-w-md mx-auto px-2">
+                {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    if (tab.isCenter) {
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => onTabChange(tab.id)}
+                                className="flex flex-col items-center justify-center"
+                            >
+                                <div
+                                    className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg -mt-4">
+                                    <Icon className="w-6 h-6 text-white"/>
+                                </div>
+                            </button>
+                        );
+                    }
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => onTabChange(tab.id)}
+                            className="flex flex-col items-center justify-center gap-0.5 flex-1"
+                        >
+                            <Icon
+                                className={`w-6 h-6 transition ${isActive ? 'text-blue-500' : isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}
+                            />
+                            <span
+                                className={`text-[10px] font-medium transition ${isActive ? 'text-blue-500' : isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}
+                            >
+                {tab.label}
+              </span>
+                        </button>
+                    );
+                })}
             </div>
         </nav>
     );

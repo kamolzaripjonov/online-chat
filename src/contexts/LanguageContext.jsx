@@ -1,4 +1,4 @@
-import React, {createContext, useContext, useState, useEffect} from 'react';
+import {createContext, useContext, useState, useEffect} from 'react';
 
 const translations = {
     en: {
@@ -85,6 +85,36 @@ const translations = {
         months6: '6 months',
         planExpires: 'Expires',
         expired: 'Expired',
+        follow: 'Follow',
+        following2: 'Following',
+        unfollow: 'Unfollow',
+        search: 'Search',
+        searchUsers: 'Search users...',
+        noResults: 'No results found',
+        sendMessage: 'Send',
+        online: 'Online',
+        offline: 'Offline',
+        incomingCall: 'Incoming Call',
+        callDeclined: 'Call Declined',
+        callEnded: 'Call Ended',
+        connecting: 'Connecting...',
+        connected: 'Connected',
+        deletePost: 'Delete Post',
+        deleteComment: 'Delete',
+        confirmDelete: 'Are you sure?',
+        you: 'You',
+        noMessages: 'No messages yet',
+        sayHello: 'Say hello!',
+        startCall: 'Start Call',
+        back: 'Back',
+        camera: 'Camera',
+        gallery: 'Gallery',
+        upload: 'Upload',
+        uploading: 'Uploading...',
+        errorUpload: 'Upload failed',
+        caption: 'Caption',
+        postShared: 'Post shared!',
+        storyShared: 'Story shared!',
     }, ru: {
         signIn: 'Войти',
         signUp: 'Регистрация',
@@ -169,26 +199,58 @@ const translations = {
         months6: '6 месяцев',
         planExpires: 'Истекает',
         expired: 'Истёк',
-    }
+        follow: 'Подписаться',
+        following2: 'Вы подписаны',
+        unfollow: 'Отписаться',
+        search: 'Поиск',
+        searchUsers: 'Поиск пользователей...',
+        noResults: 'Ничего не найдено',
+        sendMessage: 'Отправить',
+        online: 'В сети',
+        offline: 'Не в сети',
+        incomingCall: 'Входящий звонок',
+        callDeclined: 'Звонок отклонён',
+        callEnded: 'Звонок завершён',
+        connecting: 'Подключение...',
+        connected: 'Подключено',
+        deletePost: 'Удалить пост',
+        deleteComment: 'Удалить',
+        confirmDelete: 'Вы уверены?',
+        you: 'Вы',
+        noMessages: 'Нет сообщений',
+        sayHello: 'Скажите привет!',
+        startCall: 'Начать звонок',
+        back: 'Назад',
+        camera: 'Камера',
+        gallery: 'Галерея',
+        upload: 'Загрузить',
+        uploading: 'Загрузка...',
+        errorUpload: 'Ошибка загрузки',
+        caption: 'Подпись',
+        postShared: 'Пост опубликован!',
+        storyShared: 'История опубликована!',
+    },
 };
 
 const LanguageContext = createContext(undefined);
 
 export function LanguageProvider({children}) {
     const [language, setLanguage] = useState(() => localStorage.getItem('manga_language') || 'en');
+
     useEffect(() => {
         localStorage.setItem('manga_language', language);
     }, [language]);
 
     const t = (key) => translations[language]?.[key] || key;
-    const toggleLanguage = () => setLanguage(prev => prev === 'en' ? 'ru' : 'en');
+    const toggleLanguage = () => setLanguage(prev => (prev === 'en' ? 'ru' : 'en'));
 
-    return <LanguageContext.Provider
-        value={{language, setLanguage, t, toggleLanguage}}>{children}</LanguageContext.Provider>;
+    return (<LanguageContext.Provider value={{t, language, toggleLanguage}}>
+        {children}
+    </LanguageContext.Provider>);
 }
 
 export function useLanguage() {
-    const context = useContext(LanguageContext);
-    if (!context) throw new Error('useLanguage must be used within LanguageProvider');
-    return context;
+    const ctx = useContext(LanguageContext);
+    if (!ctx) throw new Error('useLanguage must be used within LanguageProvider');
+    return ctx;
 }

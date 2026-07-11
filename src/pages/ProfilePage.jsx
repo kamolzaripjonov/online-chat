@@ -1,288 +1,274 @@
-import React, {useState, useEffect} from 'react';
+import {useState, useEffect, useCallback} from 'react';
 import {useAuth} from '../contexts/AuthContext';
-import {useLanguage} from '../contexts/LanguageContext';
 import {useTheme} from '../contexts/ThemeContext';
-import {Settings, Edit2, Video, Crown, Globe, Eye, Heart, MessageCircle, Grid, Bookmark, LogOut} from 'lucide-react';
-import {useNavigate} from 'react-router-dom';
-import api from '../api/api';
+import {useLanguage} from '../contexts/LanguageContext';
+import api from '../lib/api';
+import PostCard from '../components/PostCard';
+import {
+    Settings,
+    Camera,
+    Grid3x3,
+    Bookmark,
+    Heart,
+    UserPlus,
+    UserCheck,
+    ArrowLeft,
+    Loader2,
+    Edit2,
+    X
+} from 'lucide-react';
 
-export default function ProfilePage({onOpenSettings}) {
-    const navigate = useNavigate();
-    const {user, profile, updateProfile, logout} = useAuth();
-    const {t} = useLanguage();
+function normalizeUser(raw) {
+    if (!raw) return null;
+    return {
+        id: raw.id || raw._id,
+        _id: raw._id,
+        username: raw.username || '',
+        full_name: raw.full_name || raw.fullName || '',
+        avatar_url: raw.avatar_url || raw.avatarUrl || raw.avatar || null,
+        bio: raw.bio || '',
+        followers_count: raw.followers_count ?? raw.followersCount ?? 0,
+        following_count: raw.following_count ?? raw.followingCount ?? 0,
+        posts_count: raw.posts_count ?? raw.postsCount ?? 0,
+        following: raw.following ?? false,
+    };
+}
+
+export default function ProfilePage({userId, onBack, onOpenSettings}) {
+    const {user, updateProfile} = useAuth();
     const {isDarkMode} = useTheme();
-
-    const [userPosts, setUserPosts] = useState([]);
+    const {t} = useLanguage();
+    const [profile, setProfile] = useState(null);
+    const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [editing, setEditing] = useState(false);
-    const [editUsername, setEditUsername] = useState('');
-    const [editFullName, setEditFullName] = useState('');
-    const [editBio, setEditBio] = useState('');
-    const [editWebsite, setEditWebsite] = useState('');
-    const [saving, setSaving] = useState(false);
-    const [editError, setEditError] = useState('');
     const [activeTab, setActiveTab] = useState('posts');
-    const [stats, setStats] = useState({views: 0, likes: 0, comments: 0});
-    const [followers, setFollowers] = useState(0);
-    const [following, setFollowing] = useState(0);
-    const [showLogoutModal, setShowLogoutModal] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editForm, setEditForm] = useState({username: '', full_name: '', bio: ''});
+    const [followLoading, setFollowLoading] = useState(false);
 
-    useEffect(() => {
-        if (profile) {
-            setEditUsername(profile.username || '');
-            setEditFullName(profile.name || '');
-            setEditBio(profile.bio || '');
-            setEditWebsite(profile.website || '');
-            loadUserData();
-        }
-    }, [profile, user]);
+    const isOwnProfile = !userId || userId === user?.id;
 
-    const loadUserData = async () => {
+    const loadProfile = useCallback(async () => {
+        setLoading(true);
         try {
-            setLoading(true);
-            const response = await api.posts.list(1, 100);
-            const posts = response.data || response || [];
-            const userPostsFiltered = posts.filter(p => p.userId === user?.id || p.user_id === user?.id);
-            setUserPosts(userPostsFiltered.sort((a, b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at)));
-
-            let totalViews = 0, totalLikes = 0, totalComments = 0;
-            userPostsFiltered.forEach(post => {
-                totalViews += post.viewsCount || post.views_count || 0;
-                totalLikes += post.likesCount || post.likes_count || post.likes?.length || 0;
-                totalComments += post.commentsCount || post.comments_count || post.comments?.length || 0;
-            });
-            setStats({views: totalViews, likes: totalLikes, comments: totalComments});
+            let data;
+            if (isOwnProfile) {
+                data = normalizeUser(user);
+                if (data) {
+                    const statsRes = await api.user.getProfile(user.id);
+                    const stats = normalizeUser(statsRes.data || statsRes);
+                    if (stats) data = {...data, ...stats};
+                }
+            } else {
+                const res = await api.user.getProfile(userId);
+                data = normalizeUser(res.data || res);
+            }
+            setProfile(data);
+            if (data) {
+                setEditForm({username: data.username || '', full_name: data.full_name || '', bio: data.bio || ''});
+            }
         } catch (err) {
-            console.error('Error loading user data:', err);
+            console.error('Error loading profile:', err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [userId, user, isOwnProfile]);
+
+    const loadPosts = useCallback(async () => {
+        if (!profile?.id) return;
+        try {
+            const response = await api.posts.userPosts(profile.id);
+            const data = response.data || response || [];
+            setPosts(data);
+        } catch (err) {
+            console.error('Error loading posts:', err);
+        }
+    }, [profile]);
+
+    useEffect(() => {
+        loadProfile();
+    }, [loadProfile]);
+
+    useEffect(() => {
+        if (profile) loadPosts();
+    }, [profile, loadPosts]);
 
     const handleSaveEdit = async () => {
-        setSaving(true);
-        setEditError('');
-
-        if (!editUsername.trim()) {
-            setEditError('Username is required');
-            setSaving(false);
-            return;
-        }
-
         try {
-            const result = await updateProfile({
-                username: editUsername.toLowerCase().trim(),
-                full_name: editFullName.trim(),
-                bio: editBio.trim(),
-                website: editWebsite.trim() || null,
-            });
+            await updateProfile(editForm);
+            await loadProfile();
+            setIsEditing(false);
+        } catch (err) {
+            console.error('Edit profile error:', err);
+        }
+    };
 
-            if (!result.success) {
-                setEditError(result.error || 'Update failed');
+    const handleFollow = async () => {
+        if (!profile) return;
+        setFollowLoading(true);
+        try {
+            if (profile.following) {
+                await api.follow.unfollow(profile.id);
+                setProfile({...profile, following: false, followers_count: profile.followers_count - 1});
             } else {
-                setEditing(false);
+                await api.follow.follow(profile.id);
+                setProfile({...profile, following: true, followers_count: profile.followers_count + 1});
             }
         } catch (err) {
-            setEditError(err.response?.data?.message || 'Update failed');
+            console.error('Follow error:', err);
+        } finally {
+            setFollowLoading(false);
         }
-        setSaving(false);
     };
 
-    const handleLogout = () => setShowLogoutModal(true);
-    const confirmLogout = () => {
-        logout();
-        navigate('/login');
-    };
+    if (loading) {
+        return (
+            <div
+                className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-slate-950' : 'bg-white'}`}>
+                <Loader2 className={`w-8 h-8 animate-spin ${isDarkMode ? 'text-slate-600' : 'text-gray-300'}`}/>
+            </div>
+        );
+    }
 
-    if (!profile) return null;
+    if (!profile) {
+        return (
+            <div
+                className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-slate-950' : 'bg-white'}`}>
+                <p className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}>User not found</p>
+            </div>
+        );
+    }
+
+    const avatar = profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username || 'default'}`;
 
     return (
-        <div className="px-4 pb-20">
-            <div className="flex items-center justify-between py-4">
-                <h1 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{profile.username}</h1>
-                <div className="flex items-center gap-2">
-                    <button onClick={handleLogout}
-                            className={`p-2 rounded-full transition ${isDarkMode ? 'text-red-400 hover:bg-red-500/20' : 'text-red-500 hover:bg-red-50'}`}>
-                        <LogOut className="w-6 h-6"/>
+        <div className={`min-h-screen pb-20 ${isDarkMode ? 'bg-slate-950' : 'bg-white'}`}>
+            <div
+                className={`flex items-center gap-3 px-4 py-3 ${isDarkMode ? 'bg-slate-900/90' : 'bg-white/90'} glass sticky top-0 z-10`}>
+                {!isOwnProfile && (
+                    <button onClick={onBack} className={isDarkMode ? 'text-slate-300' : 'text-gray-700'}>
+                        <ArrowLeft className="w-6 h-6"/>
                     </button>
-                    <button onClick={onOpenSettings}
-                            className={`p-2 rounded-full transition ${isDarkMode ? 'text-white hover:bg-slate-700' : 'text-gray-900 hover:bg-gray-100'}`}>
+                )}
+                <h2 className={`text-lg font-bold flex-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{profile.username}</h2>
+                {isOwnProfile && (
+                    <button onClick={onOpenSettings} className={isDarkMode ? 'text-slate-300' : 'text-gray-700'}>
                         <Settings className="w-6 h-6"/>
                     </button>
-                </div>
-            </div>
-
-            <div className="flex items-start gap-6 mb-6">
-                <img src={profile.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`}
-                     alt={profile.username}
-                     className="w-20 h-20 sm:w-28 sm:h-28 rounded-full object-cover border-2 border-blue-500"/>
-                <div className="flex-1">
-                    <div className="flex gap-6 text-center">
-                        <div><p
-                            className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{userPosts.length}</p>
-                            <p className="text-xs text-gray-500">{t('posts')}</p></div>
-                        <div><p
-                            className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{followers}</p>
-                            <p className="text-xs text-gray-500">{t('followers')}</p></div>
-                        <div><p
-                            className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{following}</p>
-                            <p className="text-xs text-gray-500">{t('following')}</p></div>
-                    </div>
-                    <button onClick={() => setEditing(true)}
-                            className={`mt-4 w-full px-6 py-1.5 rounded-lg flex items-center justify-center gap-2 transition ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'} text-sm font-semibold`}>
-                        <Edit2 className="w-4 h-4"/> {t('editProfile')}
-                    </button>
-                </div>
-            </div>
-
-            <div className="mb-6">
-                <p className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{profile.name || profile.username}</p>
-                {profile.bio &&
-                    <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{profile.bio}</p>}
-                {profile.website && <a href={profile.website} target="_blank" rel="noopener noreferrer"
-                                       className={`text-sm flex items-center gap-1 mt-1 ${profile.website?.startsWith('http') ? 'text-blue-500' : 'text-gray-500'}`}><Globe
-                    className="w-4 h-4"/>{profile.website}</a>}
-                <div className="flex items-center gap-4 mt-3">
-                    {profile.is_premium &&
-                        <div className="flex items-center gap-1 text-yellow-500 text-sm"><Crown className="w-4 h-4"/>Premium
-                        </div>}
-                </div>
-            </div>
-
-            <div className={`rounded-xl p-4 mb-6 ${isDarkMode ? 'bg-slate-800' : 'bg-gray-100'}`}>
-                <h3 className={`font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t('accountStats')}</h3>
-                <div className="grid grid-cols-3 gap-4">
-                    <div className="text-center">
-                        <div
-                            className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
-                            <Eye className="w-5 h-5 text-blue-500"/></div>
-                        <p className={`font-bold mt-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{stats.views}</p>
-                        <p className="text-xs text-gray-500">{t('views')}</p></div>
-                    <div className="text-center">
-                        <div
-                            className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center ${isDarkMode ? 'bg-red-500/20' : 'bg-red-100'}`}>
-                            <Heart className="w-5 h-5 text-red-500"/></div>
-                        <p className={`font-bold mt-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{stats.likes}</p>
-                        <p className="text-xs text-gray-500">{t('likes')}</p></div>
-                    <div className="text-center">
-                        <div
-                            className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center ${isDarkMode ? 'bg-green-500/20' : 'bg-green-100'}`}>
-                            <MessageCircle className="w-5 h-5 text-green-500"/></div>
-                        <p className={`font-bold mt-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{stats.comments}</p>
-                        <p className="text-xs text-gray-500">{t('comments')}</p></div>
-                </div>
-            </div>
-
-            <div className={`border-t ${isDarkMode ? 'border-slate-700' : 'border-gray-200'} flex`}>
-                <button onClick={() => setActiveTab('posts')}
-                        className={`flex-1 py-3 text-sm font-semibold transition flex items-center justify-center gap-1 ${activeTab === 'posts' ? `${isDarkMode ? 'text-white border-t-2 border-white' : 'text-gray-900 border-t-2 border-gray-900'}` : `${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}`}>
-                    <Grid className="w-4 h-4"/><span>{t('posts')}</span>
-                </button>
-                <button onClick={() => setActiveTab('saved')}
-                        className={`flex-1 py-3 text-sm font-semibold transition flex items-center justify-center gap-1 ${activeTab === 'saved' ? `${isDarkMode ? 'text-white border-t-2 border-white' : 'text-gray-900 border-t-2 border-gray-900'}` : `${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}`}>
-                    <Bookmark className="w-4 h-4"/><span>Saved</span>
-                </button>
-            </div>
-
-            <div className="mt-4">
-                {loading ? (
-                    <div className="grid grid-cols-3 gap-1">{[...Array(6)].map((_, i) => <div key={i}
-                                                                                              className={`aspect-square animate-pulse ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}/>)}</div>
-                ) : userPosts.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">{t('noPosts')}</div>
-                ) : (
-                    <div className="grid grid-cols-3 gap-1">
-                        {userPosts.map((post) => (
-                            <div key={post._id || post.id} className="aspect-square relative group cursor-pointer">
-                                {post.mediaUrl || post.media_url ? (
-                                    post.mediaType === 'video' || post.media_type === 'video' ? (
-                                        <div
-                                            className={`w-full h-full flex items-center justify-center ${isDarkMode ? 'bg-slate-800' : 'bg-gray-100'}`}>
-                                            <Video
-                                                className={`w-6 h-6 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}/>
-                                        </div>
-                                    ) : (
-                                        <img src={post.mediaUrl || post.media_url} alt=""
-                                             className="w-full h-full object-cover"/>
-                                    )
-                                ) : (
-                                    <div
-                                        className={`w-full h-full flex items-center justify-center ${isDarkMode ? 'bg-slate-800' : 'bg-gray-100'}`}>
-                                        <span className="text-2xl">📝</span>
-                                    </div>
-                                )}
-                                <div
-                                    className={`absolute inset-0 flex items-center justify-center gap-3 text-white text-sm opacity-0 group-hover:opacity-100 transition ${isDarkMode ? 'bg-black/50' : 'bg-black/40'}`}>
-                                    <span className="flex items-center gap-1"><Heart
-                                        className="w-4 h-4"/> {post.likesCount || post.likes_count || post.likes?.length || 0}</span>
-                                    <span className="flex items-center gap-1"><MessageCircle
-                                        className="w-4 h-4"/> {post.commentsCount || post.comments_count || post.comments?.length || 0}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
                 )}
             </div>
 
-            {editing && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className={`w-full max-w-md rounded-2xl p-6 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t('editProfile')}</h3>
-                            <button onClick={() => setEditing(false)}
-                                    className={`text-xl ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}>✕
-                            </button>
+            <div className="flex flex-col items-center px-4 py-6">
+                <div className="relative">
+                    <img src={avatar} alt={profile.username}
+                         className="w-24 h-24 rounded-full object-cover border-2 border-white shadow-lg"/>
+                    {isOwnProfile && (
+                        <button
+                            className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center">
+                            <Camera className="w-4 h-4 text-white"/>
+                        </button>
+                    )}
+                </div>
+                <h3 className={`text-xl font-bold mt-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{profile.full_name || profile.username}</h3>
+                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>@{profile.username}</p>
+                {profile.bio &&
+                    <p className={`text-sm text-center mt-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{profile.bio}</p>}
+            </div>
+
+            <div className="flex justify-around px-8 py-3">
+                <div className="text-center">
+                    <p className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{profile.posts_count ?? posts.length}</p>
+                    <p className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>{t('posts')}</p>
+                </div>
+                <div className="text-center">
+                    <p className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{profile.followers_count ?? 0}</p>
+                    <p className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>{t('followers')}</p>
+                </div>
+                <div className="text-center">
+                    <p className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{profile.following_count ?? 0}</p>
+                    <p className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>{t('following')}</p>
+                </div>
+            </div>
+
+            <div className="px-4 mt-2">
+                {isOwnProfile ? (
+                    <button onClick={() => setIsEditing(true)}
+                            className={`w-full py-2 rounded-lg border ${isDarkMode ? 'border-slate-700 text-slate-200' : 'border-gray-300 text-gray-800'} font-medium`}>
+                        {t('editProfile')}
+                    </button>
+                ) : (
+                    <button
+                        onClick={handleFollow}
+                        disabled={followLoading}
+                        className={`w-full py-2 rounded-lg font-medium disabled:opacity-50 ${profile.following ? `${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-800'}` : 'bg-blue-500 text-white'}`}
+                    >
+                        {profile.following ? t('following') : t('follow')}
+                    </button>
+                )}
+            </div>
+
+            <div className={`flex border-t mt-4 ${isDarkMode ? 'border-slate-800' : 'border-gray-200'}`}>
+                <button onClick={() => setActiveTab('posts')}
+                        className={`flex-1 py-3 flex items-center justify-center ${activeTab === 'posts' ? 'border-t-2 border-blue-500' : ''}`}>
+                    <Grid3x3
+                        className={`w-5 h-5 ${activeTab === 'posts' ? 'text-blue-500' : isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}/>
+                </button>
+            </div>
+
+            {activeTab === 'posts' && (
+                <div>
+                    {posts.length === 0 ? (
+                        <p className={`text-sm text-center py-10 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>{t('noPosts')}</p>
+                    ) : (
+                        <div className="grid grid-cols-3 gap-0.5">
+                            {posts.map((post) => {
+                                const mediaUrl = post.media_url || post.mediaUrl || '';
+                                return (
+                                    <div key={post.id || post._id} className="aspect-square">
+                                        <img src={mediaUrl} alt="" className="w-full h-full object-cover"/>
+                                    </div>
+                                );
+                            })}
                         </div>
-
-                        {editError && <div
-                            className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-500 text-sm mb-4">{editError}</div>}
-
-                        <div className="space-y-4">
-                            <div><label
-                                className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{t('username')}</label><input
-                                type="text" value={editUsername}
-                                onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-slate-700/50 border-slate-600 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400'}`}
-                                placeholder="username"/></div>
-                            <div><label
-                                className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{t('fullName')}</label><input
-                                type="text" value={editFullName} onChange={(e) => setEditFullName(e.target.value)}
-                                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-slate-700/50 border-slate-600 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400'}`}
-                                placeholder="Full Name"/></div>
-                            <div><label
-                                className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{t('bio')}</label><textarea
-                                value={editBio} onChange={(e) => setEditBio(e.target.value)} rows={3}
-                                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${isDarkMode ? 'bg-slate-700/50 border-slate-600 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400'}`}
-                                placeholder="Bio"/></div>
-                            <div><label
-                                className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{t('website')}</label><input
-                                type="text" value={editWebsite} onChange={(e) => setEditWebsite(e.target.value)}
-                                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-slate-700/50 border-slate-600 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400'}`}
-                                placeholder="https://example.com"/></div>
-
-                            <div className="flex gap-3 pt-2">
-                                <button onClick={() => setEditing(false)}
-                                        className={`flex-1 py-3 rounded-lg font-semibold transition ${isDarkMode ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-gray-100 text-gray-900 hover:bg-gray-200'}`}>{t('cancel')}</button>
-                                <button onClick={handleSaveEdit} disabled={saving}
-                                        className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50">{saving ? 'Saving...' : t('save')}</button>
-                            </div>
-                        </div>
-                    </div>
+                    )}
                 </div>
             )}
 
-            {showLogoutModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className={`w-full max-w-sm rounded-2xl p-6 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
-                        <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'} text-center mb-2`}>Logout</h3>
-                        <p className={`text-sm text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} mb-6`}>Are
-                            you sure you want to logout?</p>
-                        <div className="flex gap-3">
-                            <button onClick={() => setShowLogoutModal(false)}
-                                    className={`flex-1 py-3 rounded-lg font-semibold transition ${isDarkMode ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-gray-100 text-gray-900 hover:bg-gray-200'}`}>Cancel
-                            </button>
-                            <button onClick={confirmLogout}
-                                    className="flex-1 py-3 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition">Logout
+            {isEditing && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4 animate-fade-in"
+                     onClick={() => setIsEditing(false)}>
+                    <div className={`w-full max-w-sm rounded-2xl p-5 ${isDarkMode ? 'bg-slate-900' : 'bg-white'}`}
+                         onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t('editProfile')}</h3>
+                            <button onClick={() => setIsEditing(false)}><X
+                                className={`w-5 h-5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}/></button>
+                        </div>
+                        <div className="space-y-3">
+                            <input
+                                type="text"
+                                value={editForm.username}
+                                onChange={(e) => setEditForm({...editForm, username: e.target.value})}
+                                placeholder={t('username')}
+                                className={`w-full px-4 py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                            />
+                            <input
+                                type="text"
+                                value={editForm.full_name}
+                                onChange={(e) => setEditForm({...editForm, full_name: e.target.value})}
+                                placeholder={t('fullName')}
+                                className={`w-full px-4 py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                            />
+                            <textarea
+                                value={editForm.bio}
+                                onChange={(e) => setEditForm({...editForm, bio: e.target.value})}
+                                placeholder={t('bio')}
+                                rows={3}
+                                className={`w-full px-4 py-2.5 rounded-xl border resize-none ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                            />
+                            <button onClick={handleSaveEdit}
+                                    className="w-full py-2.5 rounded-xl bg-blue-500 text-white font-semibold">
+                                {t('save')}
                             </button>
                         </div>
                     </div>

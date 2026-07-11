@@ -9,17 +9,24 @@ function getToken() {
 
 function getHeaders() {
     const token = getToken();
-    return {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})};
+    return {
+        'Content-Type': 'application/json',
+        ...(token ? {Authorization: `Bearer ${token}`} : {}),
+    };
 }
 
 async function request(path, options = {}) {
     try {
-        const res = await fetch(`${API_URL}${path}`, {...options, headers: {...getHeaders(), ...options.headers}});
-        const data = res.headers.get('content-type')?.includes('application/json') ? await res.json().catch(() => ({})) : {};
+        const res = await fetch(`${API_URL}${path}`, {
+            ...options,
+            headers: {...getHeaders(), ...options.headers},
+        });
+        const data = res.headers.get('content-type')?.includes('application/json')
+            ? await res.json().catch(() => ({}))
+            : {};
         if (!res.ok) {
             if (res.status === 401) {
                 localStorage.removeItem('token');
-                window.location.href = '/login';
                 throw new Error('Session expired');
             }
             throw new Error(data.message || `Request failed (${res.status})`);
@@ -45,6 +52,7 @@ const api = {
         getLimits: () => request('/users/me/limits'),
         getActivity: () => request('/users/me/activity'),
         getById: (id) => request(`/users/${id}`),
+        getProfile: (id) => request(`/users/${id}`),
         search: (q) => request(`/users/search?query=${encodeURIComponent(q)}`),
     },
     posts: {
@@ -58,6 +66,7 @@ const api = {
         share: (postId, userId) => request(`/posts/${postId}/share`, {method: 'POST', body: JSON.stringify({userId})}),
         trackView: (postId) => request(`/posts/${postId}/view`, {method: 'POST'}),
         saved: (page = 1, limit = 20) => request(`/posts/saved?page=${page}&limit=${limit}`),
+        userPosts: (userId, page = 1, limit = 20) => request(`/posts/user/${userId}?page=${page}&limit=${limit}`),
     },
     comments: {
         add: (postId, content) => request(`/comments/${postId}`, {method: 'POST', body: JSON.stringify({content})}),
@@ -92,21 +101,23 @@ const api = {
         rejectRequest: (followId) => request(`/follow/requests/${followId}/reject`, {method: 'DELETE'}),
     },
     messages: {
-        send: (receiverId, content, type = 'text') => request('/messages', {
-            method: 'POST',
-            body: JSON.stringify({receiverId, content, type})
-        }),
+        send: (conversationIdOrReceiverId, content, type = 'text') =>
+            request('/messages', {
+                method: 'POST',
+                body: JSON.stringify({receiverId: conversationIdOrReceiverId, content, type})
+            }),
         getWith: (userId) => request(`/messages/${userId}`),
         markRead: (messageId) => request(`/messages/${messageId}/read`, {method: 'PUT'}),
         getChats: () => request('/chats'),
         getChatMessages: (chatId) => request(`/chats/${chatId}/messages`),
+        conversations: () => request('/chats'),
+        list: (chatId, page = 1, limit = 50) => request(`/chats/${chatId}/messages?page=${page}&limit=${limit}`),
     },
     calls: {
-        start: (receiverId, type = 'video') => request('/calls/start', {
-            method: 'POST',
-            body: JSON.stringify({receiverId, type})
-        }),
-        end: (callId, duration) => request('/calls/end', {method: 'POST', body: JSON.stringify({callId, duration})}),
+        start: (receiverId, type = 'video') =>
+            request('/calls/start', {method: 'POST', body: JSON.stringify({receiverId, type})}),
+        end: (callId, duration) =>
+            request('/calls/end', {method: 'POST', body: JSON.stringify({callId, duration})}),
         history: (userId) => request(`/calls/history/${userId}`),
         accept: (callId) => request(`/calls/${callId}/accept`, {method: 'PUT'}),
         reject: (callId) => request(`/calls/${callId}/reject`, {method: 'PUT'}),
@@ -122,10 +133,8 @@ const api = {
     },
     payments: {
         plans: () => request('/payments/plans'),
-        upgrade: (plan, paymentMethod = 'card', transactionId = null) => request('/payments/upgrade', {
-            method: 'POST',
-            body: JSON.stringify({plan, paymentMethod, transactionId})
-        }),
+        upgrade: (plan, paymentMethod = 'card', transactionId = null) =>
+            request('/payments/upgrade', {method: 'POST', body: JSON.stringify({plan, paymentMethod, transactionId})}),
         history: () => request('/payments/history'),
         status: () => request('/payments/status'),
         usage: () => request('/payments/usage'),
@@ -151,12 +160,12 @@ const api = {
             const res = await fetch(`${API_URL}/media/upload`, {
                 method: 'POST',
                 headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
-                body: formData
+                body: formData,
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || 'Upload failed');
             return data;
-        }
+        },
     },
     search: {
         all: (query) => request(`/search?query=${encodeURIComponent(query)}`),
@@ -164,14 +173,19 @@ const api = {
         posts: (query) => request(`/search/posts?query=${encodeURIComponent(query)}`),
         trending: () => request('/search/trending'),
     },
-    admin: {
-        users: () => request('/admin/users'),
-        stats: () => request('/admin/stats'),
-        toggleUser: (userId) => request(`/admin/users/${userId}/toggle`, {method: 'PUT'}),
-    },
 };
 
-// ===== SOCKET =====
+Object.defineProperty(api, 'socket', {
+    get() {
+        return socketService.socket;
+    },
+});
+
+api.sendCallSignal = (receiverId, signalData) => socketService.sendCallSignal(receiverId, signalData);
+api.startCall = (receiverId, callType) => socketService.startCall(receiverId, callType);
+api.endCall = (callId) => socketService.endCall(callId);
+
+// ===== SOCKET SERVICE =====
 let socket = null;
 
 export function getSocket() {
@@ -189,16 +203,21 @@ export function getSocket() {
         withCredentials: true,
     });
     socket.on('connect', () => {
-        console.log('✅ Socket connected');
+        console.log('Socket connected');
         if (userId) socket.emit('join', {userId});
     });
-    socket.on('disconnect', (reason) => console.log('❌ Socket disconnected:', reason));
-    socket.on('connect_error', (error) => console.error('⚠️ Socket connection error:', error.message));
+    socket.on('disconnect', (reason) => console.log('Socket disconnected:', reason));
+    socket.on('connect_error', (error) => console.error('Socket connection error:', error.message));
     socket.on('onlineUsers', (users) => window.dispatchEvent(new CustomEvent('onlineUsers', {detail: users})));
     socket.on('newMessage', (data) => window.dispatchEvent(new CustomEvent('newMessage', {detail: data})));
     socket.on('messageSent', (data) => window.dispatchEvent(new CustomEvent('messageSent', {detail: data})));
     socket.on('userTyping', (data) => window.dispatchEvent(new CustomEvent('userTyping', {detail: data})));
     socket.on('userStoppedTyping', (data) => window.dispatchEvent(new CustomEvent('userStoppedTyping', {detail: data})));
+    socket.on('incomingCall', (data) => window.dispatchEvent(new CustomEvent('incomingCall', {detail: data})));
+    socket.on('callAccepted', (data) => window.dispatchEvent(new CustomEvent('callAccepted', {detail: data})));
+    socket.on('callRejected', (data) => window.dispatchEvent(new CustomEvent('callRejected', {detail: data})));
+    socket.on('callEnded', (data) => window.dispatchEvent(new CustomEvent('callEnded', {detail: data})));
+    socket.on('callSignal', (data) => window.dispatchEvent(new CustomEvent('callSignal', {detail: data})));
     return socket;
 }
 
@@ -217,9 +236,11 @@ export function disconnectSocket() {
 }
 
 export const socketService = {
-    socket: null, isConnected: false,
+    socket: null,
+    isConnected: false,
+
     connect(userId, token) {
-        if (!userId) userId = localStorage.getItem('user_id');
+        if (!userId) userId = localStorage.getItem('user_id') || undefined;
         if (!userId) return null;
         if (this.socket) this.disconnect();
         this.socket = io(SOCKET_URL, {
@@ -234,21 +255,27 @@ export const socketService = {
         });
         this.socket.on('connect', () => {
             this.isConnected = true;
-            console.log('✅ Socket connected (service)');
+            console.log('Socket connected (service)');
             if (userId) this.socket.emit('join', {userId});
         });
         this.socket.on('disconnect', (reason) => {
             this.isConnected = false;
-            console.log('❌ Socket disconnected (service):', reason);
+            console.log('Socket disconnected (service):', reason);
         });
-        this.socket.on('connect_error', (error) => console.error('⚠️ Socket error (service):', error.message));
+        this.socket.on('connect_error', (error) => console.error('Socket error (service):', error.message));
         this.socket.on('onlineUsers', (users) => window.dispatchEvent(new CustomEvent('onlineUsers', {detail: users})));
         this.socket.on('newMessage', (data) => window.dispatchEvent(new CustomEvent('newMessage', {detail: data})));
         this.socket.on('messageSent', (data) => window.dispatchEvent(new CustomEvent('messageSent', {detail: data})));
         this.socket.on('userTyping', (data) => window.dispatchEvent(new CustomEvent('userTyping', {detail: data})));
         this.socket.on('userStoppedTyping', (data) => window.dispatchEvent(new CustomEvent('userStoppedTyping', {detail: data})));
+        this.socket.on('incomingCall', (data) => window.dispatchEvent(new CustomEvent('incomingCall', {detail: data})));
+        this.socket.on('callAccepted', (data) => window.dispatchEvent(new CustomEvent('callAccepted', {detail: data})));
+        this.socket.on('callRejected', (data) => window.dispatchEvent(new CustomEvent('callRejected', {detail: data})));
+        this.socket.on('callEnded', (data) => window.dispatchEvent(new CustomEvent('callEnded', {detail: data})));
+        this.socket.on('callSignal', (data) => window.dispatchEvent(new CustomEvent('callSignal', {detail: data})));
         return this.socket;
     },
+
     disconnect() {
         if (this.socket) {
             this.socket.removeAllListeners();
@@ -257,33 +284,49 @@ export const socketService = {
             this.isConnected = false;
         }
     },
+
     on(event, callback) {
-        if (this.socket) this.socket.on(event, callback); else console.warn('⚠️ Socket not initialized');
+        if (this.socket) this.socket.on(event, callback);
+        else console.warn('Socket not initialized');
     },
+
     off(event, callback) {
         if (this.socket) this.socket.off(event, callback);
     },
+
     emit(event, data) {
-        if (this.socket && this.isConnected) this.socket.emit(event, data); else console.warn('⚠️ Socket not connected');
+        if (this.socket && this.isConnected) this.socket.emit(event, data);
+        else console.warn('Socket not connected');
     },
+
     joinRoom(userId) {
         this.emit('join', {userId});
     },
+
     sendMessage(data) {
         this.emit('sendMessage', data);
     },
+
     sendTyping(receiverId, userId, username) {
         this.emit('typing', {receiverId, userId, username});
     },
+
     sendStopTyping(receiverId, userId) {
         this.emit('stopTyping', {receiverId, userId});
     },
-    startCall(data) {
-        this.emit('startCall', data);
+
+    startCall(receiverId, callType) {
+        this.emit('startCall', {receiverId, callType});
     },
-    endCall(data) {
-        this.emit('endCall', data);
+
+    endCall(callId) {
+        this.emit('endCall', {callId});
     },
+
+    sendCallSignal(receiverId, signalData) {
+        this.emit('callSignal', {receiverId, ...signalData});
+    },
+
     getOnlineUsers() {
         this.emit('getOnlineUsers');
     },

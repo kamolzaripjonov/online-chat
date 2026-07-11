@@ -1,342 +1,257 @@
-import React, {useState, useEffect, useRef} from 'react';
+import {useState, useEffect, useRef, useCallback} from 'react';
 import {useAuth} from '../contexts/AuthContext';
-import {useLanguage} from '../contexts/LanguageContext';
 import {useTheme} from '../contexts/ThemeContext';
-import {Search, Send, Phone, Video, ArrowLeft, Image, Info, User, MoreVertical} from 'lucide-react';
-import api from '../api/api';
+import {useLanguage} from '../contexts/LanguageContext';
+import api from '../lib/api';
+import {Send, ArrowLeft, Search, MessageCircle, Loader2, Phone, Video} from 'lucide-react';
 
-export default function ChatPage({onStartCall, hideNavigation, showNavigation}) {
+function normalizeUser(raw) {
+    if (!raw) return {id: '', username: 'Unknown', avatar_url: null};
+    return {
+        id: raw.id || raw._id,
+        _id: raw._id,
+        username: raw.username || '',
+        full_name: raw.full_name || raw.fullName || '',
+        avatar_url: raw.avatar_url || raw.avatarUrl || raw.avatar || null,
+    };
+}
+
+function normalizeMessage(raw) {
+    return {
+        id: raw.id || raw._id,
+        _id: raw._id,
+        sender_id: raw.sender_id || raw.senderId || '',
+        receiver_id: raw.receiver_id || raw.receiverId || '',
+        content: raw.content || '',
+        type: raw.type || 'text',
+        media_url: raw.media_url || raw.mediaUrl || null,
+        created_at: raw.created_at || raw.createdAt || new Date().toISOString(),
+        read: raw.read ?? false,
+    };
+}
+
+export default function ChatPage({onStartCall, conversationId: initialConversationId}) {
     const {user} = useAuth();
-    const {t} = useLanguage();
     const {isDarkMode} = useTheme();
-
+    const {t} = useLanguage();
     const [conversations, setConversations] = useState([]);
-    const [selectedConversation, setSelectedConversation] = useState(null);
+    const [activeConversation, setActiveConversation] = useState(null);
+    const [activeConversationId, setActiveConversationId] = useState(initialConversationId || null);
     const [messages, setMessages] = useState([]);
-    const [messageInput, setMessageInput] = useState('');
+    const [newMessage, setNewMessage] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [messagesLoading, setMessagesLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [onlineUsers, setOnlineUsers] = useState([]);
-
     const messagesEndRef = useRef(null);
-    const fileInputRef = useRef(null);
 
-    useEffect(() => {
-        const handleNewMessage = (data) => {
-            if (selectedConversation === data.senderId || selectedConversation === data.receiverId) {
-                setMessages(prev => [...prev, {
-                    _id: data.messageId || Date.now(),
-                    content: data.message,
-                    sender: {_id: data.senderId},
-                    createdAt: data.timestamp || new Date().toISOString()
-                }]);
-            }
-            loadConversations();
-        };
-
-        const handleOnlineUsers = (users) => setOnlineUsers(users || []);
-        window.addEventListener('newMessage', handleNewMessage);
-        window.addEventListener('onlineUsers', handleOnlineUsers);
-
-        const socket = api.getSocket();
-        if (socket.connected) socket.emit('getOnlineUsers');
-
-        return () => {
-            window.removeEventListener('newMessage', handleNewMessage);
-            window.removeEventListener('onlineUsers', handleOnlineUsers);
-        };
-    }, [selectedConversation]);
+    const loadConversations = useCallback(async () => {
+        try {
+            setLoading(true);
+            const response = await api.messages.conversations();
+            const data = response.data || response || [];
+            setConversations(data.map((c) => ({
+                id: c.id || c._id,
+                user: normalizeUser(c.user || c.participant || c.otherUser),
+                last_message: c.last_message || c.lastMessage || '',
+                last_message_time: c.last_message_time || c.lastMessageTime || c.updated_at || c.updatedAt || '',
+                unread_count: c.unread_count ?? c.unreadCount ?? 0,
+            })));
+        } catch (err) {
+            console.error('Error loading conversations:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         loadConversations();
-    }, []);
-    useEffect(() => {
-        if (selectedConversation) {
-            loadMessages(selectedConversation);
-            if (hideNavigation) hideNavigation();
-            markMessagesAsRead(selectedConversation);
-        } else {
-            if (showNavigation) showNavigation();
+    }, [loadConversations]);
+
+    const loadMessages = useCallback(async (convId) => {
+        if (!convId) return;
+        setMessagesLoading(true);
+        try {
+            const response = await api.messages.list(convId, 1, 50);
+            const data = response.data || response || [];
+            setMessages(data.map(normalizeMessage));
+        } catch (err) {
+            console.error('Error loading messages:', err);
+        } finally {
+            setMessagesLoading(false);
         }
-    }, [selectedConversation]);
+    }, []);
+
+    useEffect(() => {
+        if (activeConversationId) {
+            const conv = conversations.find((c) => c.id === activeConversationId);
+            if (conv) setActiveConversation(conv);
+            loadMessages(activeConversationId);
+        }
+    }, [activeConversationId, conversations, loadMessages]);
+
+    useEffect(() => {
+        if (initialConversationId) setActiveConversationId(initialConversationId);
+    }, [initialConversationId]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({behavior: 'smooth'});
     }, [messages]);
 
-    const loadConversations = async () => {
-        try {
-            const response = await api.messages.getChats();
-            setConversations(response.data || response || []);
-        } catch (err) {
-            console.error('Error loading conversations:', err);
-            setConversations([]);
-        }
-    };
-
-    const loadMessages = async (otherUserId) => {
-        try {
-            setLoading(true);
-            const response = await api.messages.getWith(otherUserId);
-            setMessages(response.data || response || []);
-        } catch (err) {
-            console.error('Error loading messages:', err);
-            setMessages([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const markMessagesAsRead = async (chatId) => {
-        try {
-            await api.messages.markRead(chatId);
-        } catch (err) {
-            console.error('Error marking messages as read:', err);
-        }
-    };
-
-    const searchUsers = async () => {
-        if (!searchQuery.trim()) {
-            setSearchResults([]);
-            return;
-        }
-        try {
-            const response = await api.search.users(searchQuery);
-            setSearchResults(response.data || response || []);
-        } catch (err) {
-            console.error('Error searching users:', err);
-            setSearchResults([]);
-        }
-    };
-
     useEffect(() => {
-        if (searchQuery.trim()) {
-            const delay = setTimeout(searchUsers, 500);
-            return () => clearTimeout(delay);
-        } else {
-            setSearchResults([]);
-        }
-    }, [searchQuery]);
-
-    const startConversation = (otherUserId) => {
-        setSelectedConversation(otherUserId);
-        setSearchQuery('');
-        setSearchResults([]);
-    };
-
-    const sendMessage = async (e) => {
-        e.preventDefault();
-        if (!messageInput.trim() || !selectedConversation) return;
-
-        const messageContent = messageInput.trim();
-        setMessageInput('');
-
-        const tempMessage = {
-            _id: `temp-${Date.now()}`,
-            content: messageContent,
-            sender: {_id: user?.id},
-            createdAt: new Date().toISOString(),
-            pending: true
-        };
-        setMessages(prev => [...prev, tempMessage]);
-
-        try {
-            await api.messages.send(selectedConversation, messageContent, 'text');
-            const socket = api.getSocket();
-            if (socket.connected) {
-                socket.emit('sendMessage', {
-                    receiverId: selectedConversation,
-                    message: messageContent,
-                    senderId: user?.id
+        const handleNewMessage = (event) => {
+            const msg = normalizeMessage(event.detail);
+            if (msg.conversation_id === activeConversationId || msg.conversationId === activeConversationId || msg.chat_id === activeConversationId || msg.chatId === activeConversationId) {
+                setMessages((prev) => {
+                    if (prev.some((m) => m.id === msg.id)) return prev;
+                    return [...prev, msg];
                 });
             }
             loadConversations();
+        };
+        window.addEventListener('newMessage', handleNewMessage);
+        return () => window.removeEventListener('newMessage', handleNewMessage);
+    }, [activeConversationId, loadConversations]);
+
+    const handleSend = async (e) => {
+        e.preventDefault();
+        if (!newMessage.trim() || !activeConversationId) return;
+        const text = newMessage.trim();
+        setNewMessage('');
+        try {
+            const response = await api.messages.send(activeConversationId, text);
+            const msg = normalizeMessage(response.data || response);
+            setMessages((prev) => [...prev, msg]);
         } catch (err) {
-            console.error('Error sending message:', err);
-            setMessages(prev => prev.filter(m => m._id !== tempMessage._id));
+            console.error('Send error:', err);
+            setNewMessage(text);
         }
     };
 
-    const handleTyping = (e) => {
-        const value = e.target.value;
-        setMessageInput(value);
-        const socket = api.getSocket();
-        if (socket.connected && selectedConversation) {
-            if (value.trim()) {
-                socket.emit('typing', {receiverId: selectedConversation, userId: user?.id, username: user?.username});
-            } else {
-                socket.emit('stopTyping', {receiverId: selectedConversation, userId: user?.id});
-            }
-        }
+    const formatTime = (timestamp) => {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
     };
 
-    const formatTime = (date) => {
-        if (!date) return '';
-        const d = new Date(date);
-        return d.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit', hour12: true});
-    };
+    const filteredConversations = conversations.filter((c) =>
+        c.user?.username?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
-    const selectedUser = conversations.find(u => u._id === selectedConversation || u.id === selectedConversation);
-    const isOnline = onlineUsers.includes(selectedConversation);
-
-    if (selectedConversation) {
+    if (activeConversation) {
+        const otherUser = activeConversation.user;
+        const avatar = otherUser?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherUser?.username || 'default'}`;
         return (
-            <div className={`fixed inset-0 flex flex-col ${isDarkMode ? 'bg-slate-900' : 'bg-gray-50'} z-50`}>
+            <div className={`flex flex-col h-screen ${isDarkMode ? 'bg-slate-950' : 'bg-white'}`}>
                 <div
-                    className={`sticky top-0 z-20 flex items-center gap-3 px-2 py-2 border-b backdrop-blur-lg ${isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-gray-200'}`}>
-                    <button onClick={() => setSelectedConversation(null)}
-                            className={`p-2 rounded-full transition flex-shrink-0 ${isDarkMode ? 'hover:bg-slate-800 text-white' : 'hover:bg-gray-100 text-gray-900'}`}>
+                    className={`flex items-center gap-3 px-4 py-3 border-b ${isDarkMode ? 'border-slate-800' : 'border-gray-200'}`}>
+                    <button onClick={() => {
+                        setActiveConversation(null);
+                        setActiveConversationId(null);
+                    }} className={isDarkMode ? 'text-slate-300' : 'text-gray-700'}>
                         <ArrowLeft className="w-6 h-6"/>
                     </button>
-                    <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onClick={() => {
-                        const username = selectedUser?.username;
-                        if (username) window.location.href = `/profile/${username}`;
-                    }}>
-                        <img src={selectedUser?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'}
-                             alt="" className="w-9 h-9 rounded-full flex-shrink-0"/>
-                        <div className="min-w-0">
-                            <p className={`font-semibold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{selectedUser?.name || selectedUser?.username || 'Unknown'}</p>
-                            <p className={`text-xs ${isOnline ? 'text-green-500' : 'text-gray-500'}`}>{isOnline ? 'Online' : 'Offline'}</p>
-                        </div>
+                    <img src={avatar} alt="" className="w-9 h-9 rounded-full object-cover"/>
+                    <div className="flex-1">
+                        <p className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{otherUser?.username || 'Unknown'}</p>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                        <button onClick={() => onStartCall(selectedConversation, 'voice')}
-                                className={`p-2.5 rounded-full transition touch-manipulation ${isDarkMode ? 'hover:bg-slate-800 text-white' : 'hover:bg-gray-100 text-gray-900'}`}>
-                            <Phone className="w-5 h-5"/></button>
-                        <button onClick={() => onStartCall(selectedConversation, 'video')}
-                                className={`p-2.5 rounded-full transition touch-manipulation ${isDarkMode ? 'hover:bg-slate-800 text-white' : 'hover:bg-gray-100 text-gray-900'}`}>
-                            <Video className="w-5 h-5"/></button>
-                        <button
-                            className={`p-2.5 rounded-full transition touch-manipulation ${isDarkMode ? 'hover:bg-slate-800 text-white' : 'hover:bg-gray-100 text-gray-900'}`}>
-                            <MoreVertical className="w-5 h-5"/></button>
-                    </div>
+                    <button onClick={() => onStartCall?.(otherUser, 'audio')}
+                            className={`p-2 rounded-full ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
+                        <Phone className={`w-5 h-5 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}/>
+                    </button>
+                    <button onClick={() => onStartCall?.(otherUser, 'video')}
+                            className={`p-2 rounded-full ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
+                        <Video className={`w-5 h-5 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}/>
+                    </button>
                 </div>
 
-                <div className={`flex-1 overflow-y-auto px-4 py-4 ${isDarkMode ? 'bg-slate-900' : 'bg-gray-50'}`}>
-                    <div className="max-w-2xl mx-auto space-y-1.5">
-                        {loading ? (
-                            <div className="text-center py-8">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"/>
-                            </div>
-                        ) : messages.length === 0 ? (
-                            <div className="text-center py-16">
-                                <img
-                                    src={selectedUser?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'}
-                                    alt="" className="w-20 h-20 rounded-full mx-auto mb-4"/>
-                                <p className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{selectedUser?.name || selectedUser?.username || 'Unknown'}</p>
-                                <p className={`text-sm mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Start a
-                                    conversation</p>
-                            </div>
-                        ) : (
-                            messages.map((msg) => {
-                                const isOwn = msg.sender?._id === user?.id || msg.senderId === user?.id;
-                                return (
-                                    <div key={msg._id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                                        <div
-                                            className={`max-w-[80%] sm:max-w-[70%] px-3.5 py-2 rounded-2xl ${isOwn ? 'bg-blue-600 text-white rounded-br-md' : isDarkMode ? 'bg-slate-800 text-white rounded-bl-md' : 'bg-gray-200 text-gray-900 rounded-bl-md'}`}>
-                                            <p className="text-[15px] leading-relaxed break-words">{msg.content}</p>
-                                            <p className={`text-[10px] mt-1 text-right ${isOwn ? 'text-blue-200' : isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{formatTime(msg.createdAt)}{msg.pending && ' ⏳'}</p>
-                                        </div>
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+                    {messagesLoading ? (
+                        <div className="flex justify-center py-10">
+                            <Loader2
+                                className={`w-6 h-6 animate-spin ${isDarkMode ? 'text-slate-600' : 'text-gray-300'}`}/>
+                        </div>
+                    ) : messages.length === 0 ? (
+                        <p className={`text-sm text-center py-10 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>{t('noMessages')}</p>
+                    ) : (
+                        messages.map((msg) => {
+                            const isMine = msg.sender_id === user?.id || msg.senderId === user?.id;
+                            return (
+                                <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                                    <div
+                                        className={`max-w-[70%] px-3.5 py-2 rounded-2xl ${isMine ? 'bg-blue-500 text-white' : isDarkMode ? 'bg-slate-800 text-slate-200' : 'bg-gray-100 text-gray-800'}`}>
+                                        <p className="text-sm break-words">{msg.content}</p>
+                                        <p className={`text-[10px] mt-0.5 ${isMine ? 'text-blue-100' : isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>{formatTime(msg.created_at)}</p>
                                     </div>
-                                );
-                            })
-                        )}
-                        <div ref={messagesEndRef}/>
-                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                    <div ref={messagesEndRef}/>
                 </div>
 
-                <div
-                    className={`sticky bottom-0 ${isDarkMode ? 'bg-slate-900' : 'bg-white'} border-t ${isDarkMode ? 'border-slate-800' : 'border-gray-200'} pb-safe`}>
-                    <form onSubmit={sendMessage} className="flex items-end gap-2 px-3 py-2 max-w-2xl mx-auto">
-                        <button type="button"
-                                className={`p-2.5 rounded-full transition touch-manipulation flex-shrink-0 ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}
-                                onClick={() => fileInputRef.current?.click()}><Image className="w-6 h-6"/></button>
-                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*"/>
-                        <div
-                            className={`flex-1 flex items-center min-h-[40px] rounded-full px-4 py-1.5 ${isDarkMode ? 'bg-slate-800' : 'bg-gray-100'}`}>
-                            <input type="text" value={messageInput} onChange={handleTyping}
-                                   placeholder={t('typeMessage')}
-                                   className={`flex-1 bg-transparent text-[15px] focus:outline-none ${isDarkMode ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}/>
-                        </div>
-                        {messageInput.trim() ? (
-                            <button type="submit"
-                                    className={`p-2.5 rounded-full transition touch-manipulation flex-shrink-0 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}>
-                                <Send className="w-6 h-6"/></button>
-                        ) : (
-                            <button type="button"
-                                    className={`p-2.5 rounded-full transition touch-manipulation flex-shrink-0 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                                    <path
-                                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                </svg>
-                            </button>
-                        )}
-                    </form>
-                </div>
+                <form onSubmit={handleSend}
+                      className={`flex items-center gap-2 px-4 py-3 border-t ${isDarkMode ? 'border-slate-800' : 'border-gray-200'}`}>
+                    <input
+                        type="text"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder={t('typeMessage')}
+                        className={`flex-1 px-4 py-2.5 rounded-full border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
+                    <button type="submit" disabled={!newMessage.trim()}
+                            className="p-2.5 bg-blue-500 text-white rounded-full disabled:opacity-30">
+                        <Send className="w-5 h-5"/>
+                    </button>
+                </form>
             </div>
         );
     }
 
     return (
-        <div className={`flex flex-col ${isDarkMode ? 'bg-slate-900' : 'bg-gray-50'}`}>
-            <div className={`sticky top-0 z-10 p-4 ${isDarkMode ? 'bg-slate-900' : 'bg-gray-50'}`}>
+        <div className={`min-h-screen ${isDarkMode ? 'bg-slate-950' : 'bg-white'}`}>
+            <div className="p-4">
+                <h2 className={`text-xl font-bold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t('messages')}</h2>
                 <div className="relative">
                     <Search
-                        className={`absolute left-4 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} w-5 h-5`}/>
-                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                           placeholder={t('startChat')}
-                           className={`w-full pl-12 pr-4 py-3 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-slate-800 border border-slate-700 text-white placeholder-gray-500' : 'bg-white border border-gray-200 text-gray-900 placeholder-gray-400'}`}/>
+                        className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}/>
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder={t('search')}
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
                 </div>
-                {searchResults.length > 0 && (
-                    <div
-                        className={`absolute left-4 right-4 top-full mt-2 rounded-xl shadow-xl overflow-hidden z-20 ${isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-gray-200'}`}>
-                        {searchResults.map((user) => (
-                            <button key={user._id || user.id} onClick={() => startConversation(user._id || user.id)}
-                                    className={`w-full flex items-center gap-3 p-3 transition ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'}`}>
-                                <img src={user.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'}
-                                     alt={user.username} className="w-12 h-12 rounded-full"/>
-                                <div className="text-left"><p
-                                    className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{user.name || user.username}</p>
-                                    <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>@{user.username}</p>
-                                </div>
-                            </button>
-                        ))}
-                    </div>
-                )}
             </div>
-            <div className="flex-1 overflow-y-auto">
-                {conversations.length === 0 ? (
-                    <div className={`text-center py-16 px-4 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                        <div
-                            className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-slate-800' : 'bg-gray-100'}`}>
-                            <Send className={`w-10 h-10 ${isDarkMode ? 'text-gray-600' : 'text-gray-300'}`}/></div>
-                        <p className="text-lg font-medium">{t('noConversations')}</p>
-                        <p className="text-sm mt-2">{t('startChat')}</p>
+
+            <div className="pb-20">
+                {loading ? (
+                    <div className="flex justify-center py-10">
+                        <Loader2 className={`w-6 h-6 animate-spin ${isDarkMode ? 'text-slate-600' : 'text-gray-300'}`}/>
+                    </div>
+                ) : filteredConversations.length === 0 ? (
+                    <div className="flex flex-col items-center py-20">
+                        <MessageCircle className={`w-12 h-12 mb-3 ${isDarkMode ? 'text-slate-700' : 'text-gray-300'}`}/>
+                        <p className={`text-sm ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>{t('noConversations')}</p>
                     </div>
                 ) : (
-                    conversations.map((conv) => {
-                        const isUserOnline = onlineUsers.includes(conv._id || conv.id);
+                    filteredConversations.map((conv) => {
+                        const avatar = conv.user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${conv.user?.username || 'default'}`;
                         return (
-                            <button key={conv._id || conv.id} onClick={() => startConversation(conv._id || conv.id)}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 transition touch-manipulation ${isDarkMode ? 'hover:bg-slate-800 active:bg-slate-700' : 'hover:bg-gray-100 active:bg-gray-200'}`}>
-                                <div className="relative flex-shrink-0">
-                                    <img src={conv.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'}
-                                         alt="" className="w-14 h-14 rounded-full"/>
-                                    {isUserOnline && <div
-                                        className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-slate-900"/>}
+                            <button
+                                key={conv.id}
+                                onClick={() => setActiveConversationId(conv.id)}
+                                className={`flex items-center gap-3 w-full p-3 border-b text-left ${isDarkMode ? 'border-slate-800 hover:bg-slate-900' : 'border-gray-100 hover:bg-gray-50'}`}
+                            >
+                                <img src={avatar} alt="" className="w-12 h-12 rounded-full object-cover"/>
+                                <div className="flex-1 min-w-0">
+                                    <p className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{conv.user?.username || 'Unknown'}</p>
+                                    <p className={`text-xs truncate ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>{conv.last_message || ''}</p>
                                 </div>
-                                <div className="flex-1 min-w-0 text-left">
-                                    <p className={`font-semibold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{conv.name || conv.username || 'Unknown'}</p>
-                                    <div className="flex items-center gap-1"><p
-                                        className={`text-sm truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{conv.lastMessage || 'No messages yet'}</p>
-                                    </div>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                    <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{conv.lastMessageTime ? formatTime(conv.lastMessageTime) : ''}</p>
-                                    {conv.unreadCount > 0 && <span
-                                        className="inline-block mt-1 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">{conv.unreadCount}</span>}
-                                </div>
+                                {conv.unread_count > 0 && (
+                                    <span
+                                        className="w-5 h-5 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center">{conv.unread_count}</span>
+                                )}
                             </button>
                         );
                     })

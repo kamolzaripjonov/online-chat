@@ -1,180 +1,186 @@
-import React, {useState, useEffect} from 'react';
+import {useState, useEffect} from 'react';
+import {useAuth} from '../contexts/AuthContext';
 import {useTheme} from '../contexts/ThemeContext';
-import {useLanguage} from '../contexts/LanguageContext';
-import {Heart, MessageCircle, UserPlus, Share2, X, Trash2, CheckCheck} from 'lucide-react';
+import api from '../lib/api';
+import {Heart, MessageCircle, UserPlus, Share2, X, Trash2, CheckCheck, Bell} from 'lucide-react';
+
+function normalizeUser(raw) {
+    if (!raw) return null;
+    return {
+        id: raw.id || raw._id,
+        _id: raw._id,
+        username: raw.username || '',
+        full_name: raw.full_name || raw.fullName || '',
+        avatar_url: raw.avatar_url || raw.avatarUrl || raw.avatar || null,
+    };
+}
+
+function normalizeNotification(raw) {
+    return {
+        id: raw.id || raw._id,
+        _id: raw._id,
+        user_id: raw.user_id || raw.userId || '',
+        actor_id: raw.actor_id || raw.actorId || '',
+        actor: raw.actor || raw.user ? normalizeUser(raw.actor || raw.user) : undefined,
+        type: raw.type,
+        post_id: raw.post_id || raw.postId,
+        message: raw.message,
+        read: raw.read ?? false,
+        created_at: raw.created_at || raw.createdAt || '',
+    };
+}
 
 export default function NotificationsPanel({onClose}) {
+    const {user} = useAuth();
     const {isDarkMode} = useTheme();
-    const {t} = useLanguage();
     const [notifications, setNotifications] = useState([]);
 
     useEffect(() => {
         loadNotifications();
     }, []);
 
-    const loadNotifications = () => {
-        const stored = localStorage.getItem('manga_notifications');
-        const data = stored ? JSON.parse(stored) : [];
-        setNotifications(data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+    const loadNotifications = async () => {
+        if (!user) return;
+        try {
+            const response = await api.notifications.list(1, 50);
+            const data = response.data || response || [];
+            setNotifications(data.map(normalizeNotification));
+        } catch (error) {
+            console.error('Error loading notifications:', error);
+        }
     };
 
-    const markAsRead = (id) => {
-        const updated = notifications.map(n =>
-            n.id === id ? {...n, read: true} : n
-        );
-        setNotifications(updated);
-        localStorage.setItem('manga_notifications', JSON.stringify(updated));
+    const markAsRead = async (id) => {
+        try {
+            await api.notifications.markRead(id);
+            setNotifications((prev) => prev.map((n) => (n.id === id ? {...n, read: true} : n)));
+        } catch (error) {
+            console.error('Error marking notification:', error);
+        }
     };
 
-    const markAllAsRead = () => {
-        const updated = notifications.map(n => ({...n, read: true}));
-        setNotifications(updated);
-        localStorage.setItem('manga_notifications', JSON.stringify(updated));
+    const markAllAsRead = async () => {
+        try {
+            await api.notifications.markAllRead();
+            setNotifications((prev) => prev.map((n) => ({...n, read: true})));
+        } catch (error) {
+            console.error('Error marking all:', error);
+        }
     };
 
-    const deleteNotification = (id) => {
-        const updated = notifications.filter(n => n.id !== id);
-        setNotifications(updated);
-        localStorage.setItem('manga_notifications', JSON.stringify(updated));
-    };
-
-    const deleteAllNotifications = () => {
-        if (window.confirm('Hammasini o\'chirmoqchisiz?')) {
-            setNotifications([]);
-            localStorage.setItem('manga_notifications', JSON.stringify([]));
+    const deleteNotification = async (id) => {
+        try {
+            await api.notifications.delete(id);
+            setNotifications((prev) => prev.filter((n) => n.id !== id));
+        } catch (error) {
+            console.error('Error deleting notification:', error);
         }
     };
 
     const getNotificationIcon = (type) => {
-        const iconClass = 'w-5 h-5';
         switch (type) {
             case 'like':
-                return <Heart className={`${iconClass} text-red-500`} fill="currentColor"/>;
+                return <Heart className="w-5 h-5 text-red-500"/>;
             case 'comment':
-                return <MessageCircle className={`${iconClass} text-blue-500`}/>;
+                return <MessageCircle className="w-5 h-5 text-blue-500"/>;
             case 'follow':
-                return <UserPlus className={`${iconClass} text-green-500`}/>;
+                return <UserPlus className="w-5 h-5 text-green-500"/>;
             case 'share':
-                return <Share2 className={`${iconClass} text-purple-500`}/>;
+                return <Share2 className="w-5 h-5 text-purple-500"/>;
             default:
-                return <MessageCircle className={`${iconClass} text-gray-500`}/>;
-        }
-    };
-
-    const getNotificationMessage = (notif) => {
-        switch (notif.type) {
-            case 'like':
-                return `${notif.userName} sizning postingizni yoqtirdi`;
-            case 'comment':
-                return `${notif.userName} sizning postingizga komment qoldirdi`;
-            case 'follow':
-                return `${notif.userName} sizni kuzatishni boshladi`;
-            case 'share':
-                return `${notif.userName} sizning postingizni ulashdi`;
-            default:
-                return notif.message;
+                return <Bell className="w-5 h-5 text-slate-500"/>;
         }
     };
 
     const formatTime = (timestamp) => {
         const date = new Date(timestamp);
         const now = new Date();
-        const diff = now - date;
+        const diff = now.getTime() - date.getTime();
         const minutes = Math.floor(diff / 60000);
         const hours = Math.floor(diff / 3600000);
         const days = Math.floor(diff / 86400000);
-
-        if (minutes < 1) return 'Hozir';
-        if (minutes < 60) return `${minutes} minut oldin`;
-        if (hours < 24) return `${hours} soat oldin`;
-        if (days < 7) return `${days} kun oldin`;
-        return date.toLocaleDateString('uz-UZ');
+        if (minutes < 1) return 'now';
+        if (minutes < 60) return `${minutes}m`;
+        if (hours < 24) return `${hours}h`;
+        if (days < 7) return `${days}d`;
+        return date.toLocaleDateString();
     };
 
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const unreadCount = notifications.filter((n) => !n.read).length;
 
     return (
-        <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start animate-fade-in" onClick={onClose}>
             <div
-                className={`w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl max-h-[85vh] overflow-hidden flex flex-col ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                className={`w-full max-w-md mx-auto ${isDarkMode ? 'bg-slate-900' : 'bg-white'} min-h-screen animate-slide-up`}
+                onClick={(e) => e.stopPropagation()}>
                 <div
-                    className={`flex items-center justify-between p-4 border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
-                    <div className="flex-1">
-                        <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Notificationlar</h3>
-                        {unreadCount > 0 && (
-                            <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{unreadCount} o'qilmagan</p>
-                        )}
-                    </div>
-                    <button onClick={onClose}
-                            className={`p-2 rounded-full transition ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-slate-700' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>
-                        <X className="w-6 h-6"/>
+                    className={`sticky top-0 flex items-center justify-between p-4 border-b ${isDarkMode ? 'border-slate-800' : 'border-gray-200'} ${isDarkMode ? 'bg-slate-900/90' : 'bg-white/90'} glass`}>
+                    <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Notifications</h3>
+                    <button onClick={onClose}>
+                        <X className={`w-5 h-5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}/>
                     </button>
                 </div>
 
                 {notifications.length > 0 && (
-                    <div
-                        className={`flex gap-2 p-3 border-b ${isDarkMode ? 'border-slate-700 bg-slate-750' : 'border-gray-200 bg-gray-50'}`}>
+                    <div className="flex items-center justify-between px-4 py-2">
                         {unreadCount > 0 && (
-                            <button onClick={markAllAsRead}
-                                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}>
-                                <CheckCheck className="w-4 h-4"/> Hamma o'qilgan
-                            </button>
+                            <span className="text-xs text-blue-500 font-medium">{unreadCount} unread</span>
                         )}
-                        {notifications.length > 0 && (
-                            <button onClick={deleteAllNotifications}
-                                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition ${isDarkMode ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}>
-                                <Trash2 className="w-4 h-4"/> Hamma o'chir
-                            </button>
-                        )}
+                        <div className="flex gap-2 ml-auto">
+                            {unreadCount > 0 && (
+                                <button onClick={markAllAsRead}
+                                        className={`flex items-center gap-1 text-xs ${isDarkMode ? 'text-slate-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}>
+                                    <CheckCheck className="w-4 h-4"/> Mark all
+                                </button>
+                            )}
+                        </div>
                     </div>
                 )}
 
-                <div className="overflow-y-auto flex-1">
-                    {notifications.length === 0 ? (
-                        <div
-                            className={`flex flex-col items-center justify-center py-12 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                            <MessageCircle className="w-12 h-12 mb-3 opacity-50"/>
-                            <p>Notificationlar yo'q</p>
-                        </div>
-                    ) : (
-                        notifications.map((notif) => (
-                            <div key={notif.id} onClick={() => markAsRead(notif.id)}
-                                 className={`p-4 border-b cursor-pointer transition ${notif.read ? (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100') : (isDarkMode ? 'bg-slate-700/50 border-slate-700' : 'bg-blue-50 border-gray-100')} hover:${isDarkMode ? 'bg-slate-700' : 'bg-gray-50'}`}>
-                                <div className="flex gap-3">
-                                    <div className="flex-shrink-0">
-                                        {notif.userAvatar ? (
-                                            <img src={notif.userAvatar} alt={notif.userName}
-                                                 className="w-10 h-10 rounded-full object-cover"/>
-                                        ) : (
-                                            <div
-                                                className={`w-10 h-10 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>
-                                                {getNotificationIcon(notif.type)}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <p className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{getNotificationMessage(notif)}</p>
-                                                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{formatTime(notif.timestamp)}</p>
-                                            </div>
-                                            {!notif.read && <div
-                                                className="w-2 h-2 rounded-full bg-blue-500 ml-2 mt-1.5 flex-shrink-0"/>}
+                {notifications.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20">
+                        <Bell className={`w-12 h-12 mb-3 ${isDarkMode ? 'text-slate-700' : 'text-gray-300'}`}/>
+                        <p className={`text-sm ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>No notifications
+                            yet</p>
+                    </div>
+                ) : (
+                    <div>
+                        {notifications.map((notif) => {
+                            const avatar = notif.actor?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${notif.actor?.username || 'default'}`;
+                            return (
+                                <div
+                                    key={notif.id}
+                                    onClick={() => markAsRead(notif.id)}
+                                    className={`flex items-center gap-3 p-4 border-b cursor-pointer transition ${notif.read ? (isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100') : (isDarkMode ? 'bg-slate-800/50 border-slate-800' : 'bg-blue-50 border-gray-100')} hover:${isDarkMode ? 'bg-slate-800' : 'bg-gray-50'}`}
+                                >
+                                    <div className="relative">
+                                        <img src={avatar} alt="" className="w-10 h-10 rounded-full object-cover"/>
+                                        <div
+                                            className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white flex items-center justify-center">
+                                            {getNotificationIcon(notif.type)}
                                         </div>
                                     </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-sm ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+                                            <span
+                                                className="font-semibold">{notif.actor?.username || 'Someone'}</span>{' '}
+                                            {notif.message || ''}
+                                        </p>
+                                        <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>{formatTime(notif.created_at)}</p>
+                                    </div>
+                                    {!notif.read && <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"/>}
                                     <button onClick={(e) => {
                                         e.stopPropagation();
                                         deleteNotification(notif.id);
-                                    }}
-                                            className={`p-2 rounded-lg transition ${isDarkMode ? 'text-gray-500 hover:text-red-400 hover:bg-slate-700' : 'text-gray-400 hover:text-red-600 hover:bg-gray-100'}`}>
-                                        <X className="w-4 h-4"/>
+                                    }} className="p-1">
+                                        <Trash2
+                                            className={`w-4 h-4 ${isDarkMode ? 'text-slate-600' : 'text-gray-300'}`}/>
                                     </button>
                                 </div>
-                            </div>
-                        ))
-                    )}
-                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </div>
     );
