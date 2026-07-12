@@ -7,7 +7,7 @@ function normalizeUser(raw) {
     if (!raw) return null;
     return {
         id: raw.id || raw._id,
-        _id: raw._id,
+        _id: raw._id || raw.id,
         email: raw.email || '',
         username: raw.username || '',
         full_name: raw.full_name || raw.fullName || raw.fullname || '',
@@ -31,10 +31,14 @@ export function AuthProvider({children}) {
 
     const checkAuth = async () => {
         const token = localStorage.getItem('token');
+        console.log('🔍 Checking auth, token:', token ? '✅ Present' : '❌ Missing');
+
         if (!token) {
             setLoading(false);
             return;
         }
+
+        // 1. Avval localStorage dan o'qish
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
             try {
@@ -42,21 +46,46 @@ export function AuthProvider({children}) {
                 const normalized = normalizeUser(userData);
                 setUser(normalized);
                 setProfile(normalized);
+                console.log('👤 User set from localStorage:', normalized);
             } catch (e) {
-                // ignore
+                console.warn('⚠️ Failed to parse stored user:', e);
             }
         }
+
+        // 2. Backend dan tekshirish
         try {
+            console.log('📡 Fetching user from backend...');
             const response = await api.user.me();
+            console.log('📡 Backend response:', response);
+
             const userInfo = response.data || response;
             const normalized = normalizeUser(userInfo);
+
+            if (!normalized || !normalized.id) {
+                throw new Error('User ID is missing from response');
+            }
+
+            console.log('✅ User from backend:', normalized);
+
             setUser(normalized);
             setProfile(normalized);
+
+            // User ID ni localStorage ga saqlash
             localStorage.setItem('user', JSON.stringify(normalized));
             localStorage.setItem('user_id', normalized.id);
+
+            // Socket ulanish
             socketService.connect(normalized.id, token);
+
         } catch (err) {
-            console.error('Auth check failed:', err);
+            console.error('❌ Auth check failed:', err);
+            // Agar backend ishlamasa, localStorage dagi ma'lumotlarni ishlatamiz
+            if (!user) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user_id');
+                setUser(null);
+                setProfile(null);
+            }
         } finally {
             setLoading(false);
         }
@@ -69,19 +98,36 @@ export function AuthProvider({children}) {
     const login = async (email, password) => {
         setError(null);
         try {
+            console.log('🔐 Login attempt:', {email});
+
             const response = await api.auth.login({email, password});
+            console.log('🔐 Login response:', response);
+
             const {token, user: userInfo} = response;
-            if (!token || !userInfo) throw new Error('Invalid response');
+            if (!token || !userInfo) {
+                throw new Error('Invalid response from server');
+            }
+
             const normalized = normalizeUser(userInfo);
             const userId = normalized.id;
+
+            if (!userId) {
+                throw new Error('User ID is missing from response');
+            }
+
+            console.log('✅ User ID:', userId);
+
             localStorage.setItem('token', token);
             localStorage.setItem('user_id', userId);
             localStorage.setItem('user', JSON.stringify(normalized));
+
             setUser(normalized);
             setProfile(normalized);
             socketService.connect(userId, token);
+
             return {success: true};
         } catch (err) {
+            console.error('❌ Login error:', err);
             const msg = err.message || 'Login failed';
             setError(msg);
             return {success: false, error: msg};
@@ -91,6 +137,8 @@ export function AuthProvider({children}) {
     const register = async (data) => {
         setError(null);
         try {
+            console.log('📝 Register data:', data);
+
             const response = await api.auth.register({
                 email: data.email,
                 password: data.password,
@@ -98,18 +146,32 @@ export function AuthProvider({children}) {
                 fullName: data.fullName,
                 terms: {terms: true, promo: false, age: true},
             });
+
+            console.log('📝 Register response:', response);
+
             const {token, user: userInfo} = response;
-            if (!token || !userInfo) throw new Error('Invalid response');
+            if (!token || !userInfo) {
+                throw new Error('Invalid response from server');
+            }
+
             const normalized = normalizeUser(userInfo);
             const userId = normalized.id;
+
+            if (!userId) {
+                throw new Error('User ID is missing from response');
+            }
+
             localStorage.setItem('token', token);
             localStorage.setItem('user_id', userId);
             localStorage.setItem('user', JSON.stringify(normalized));
+
             setUser(normalized);
             setProfile(normalized);
             socketService.connect(userId, token);
+
             return {success: true};
         } catch (err) {
+            console.error('❌ Register error:', err);
             const msg = err.message || 'Registration failed';
             setError(msg);
             return {success: false, error: msg};
@@ -122,6 +184,7 @@ export function AuthProvider({children}) {
         sessionStorage.clear();
         setUser(null);
         setProfile(null);
+        window.location.href = '/login';
     };
 
     const updateProfile = async (data) => {
@@ -140,7 +203,8 @@ export function AuthProvider({children}) {
 
     return (
         <AuthContext.Provider
-            value={{user, profile, loading, error, login, register, logout, updateProfile, isAuthenticated: !!user}}>
+            value={{user, profile, loading, error, login, register, logout, updateProfile, isAuthenticated: !!user}}
+        >
             {children}
         </AuthContext.Provider>
     );
